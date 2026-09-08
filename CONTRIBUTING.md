@@ -24,8 +24,8 @@ Você pode contribuir corrigindo problemas, implementando melhorias, escrevendo 
 Na página do repositório no GitHub, copie a URL de clonagem. No terminal, execute os comandos abaixo, substituindo os valores entre `<>` pelos dados correspondentes:
 
 ```bash
-git clone https://github.com/Bug-Busters-F/API-6-ai
-cd API-6-ai
+git clone <URL_DO_REPOSITORIO>
+cd <NOME_DO_REPOSITORIO>
 ```
 
 Se você não tiver permissão de escrita, crie um fork no GitHub e clone o seu fork.
