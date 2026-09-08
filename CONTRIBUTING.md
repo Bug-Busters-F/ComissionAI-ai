@@ -24,8 +24,8 @@ Você pode contribuir corrigindo problemas, implementando melhorias, escrevendo 
 Na página do repositório no GitHub, copie a URL de clonagem. No terminal, execute os comandos abaixo, substituindo os valores entre `<>` pelos dados correspondentes:
 
 ```bash
-git clone <URL_DO_REPOSITORIO>
-cd <NOME_DO_REPOSITORIO>
+git clone https://github.com/Bug-Busters-F/API-6-ai
+cd API-6-ai
 ```
 
 Se você não tiver permissão de escrita, crie um fork no GitHub e clone o seu fork.
@@ -35,6 +35,126 @@ Se você não tiver permissão de escrita, crie um fork no GitHub e clone o seu 
 Consulte o README e a documentação do repositório, quando disponíveis, para instalar as dependências, configurar as variáveis de ambiente e executar o projeto. Os requisitos e comandos podem variar entre os repositórios.
 
 Não inclua senhas, tokens ou outras informações sensíveis nos arquivos versionados. Se houver um arquivo de exemplo de variáveis de ambiente, use-o como referência para sua configuração local.
+
+## Serviço AI (Python)
+
+### Pré-requisitos
+
+- Python 3.12 ou superior
+- Chave de API do provedor de LLM escolhido (Gemini, OpenAI ou Anthropic)
+
+### Instalação
+
+```bash
+# 1. Criar e ativar ambiente virtual
+python -m venv venv
+
+# Windows
+venv\Scripts\activate
+
+# Linux / macOS
+source venv/bin/activate
+
+# 2. Instalar dependências base
+pip install -r requirements.txt
+
+# 3. Instalar o SDK do provedor de LLM que você vai usar (escolha um)
+pip install google-generativeai   # Gemini
+pip install openai                # OpenAI
+pip install anthropic             # Anthropic
+```
+
+### Variáveis de Ambiente
+
+Copie o arquivo de exemplo e preencha com suas credenciais:
+
+```bash
+cp .env.example .env
+```
+
+Edite o `.env` com os valores corretos:
+
+| Variável       | Descrição                                           | Exemplo               |
+|----------------|-----------------------------------------------------|-----------------------|
+| `LLM_PROVIDER` | Provedor de LLM a usar                              | `gemini`              |
+| `LLM_API_KEY`  | Chave de API do provedor                            | `AIza...`             |
+| `LLM_MODEL`    | Modelo específico (deixe vazio para usar o default) | `gemini-1.5-flash`    |
+| `APP_PORT`     | Porta em que o serviço sobe                         | `8000`                |
+| `APP_RELOAD`   | Hot reload para desenvolvimento                     | `true`                |
+
+> **Nunca versione o arquivo `.env`.** Ele já está no `.gitignore`.
+
+### Inicialização Local
+
+```bash
+# A partir da raiz do repositório, com o venv ativo:
+python -m uvicorn app.main:app --reload --app-dir src
+```
+
+O serviço estará disponível em `http://localhost:8000`.
+Documentação interativa (Swagger): `http://localhost:8000/docs`
+Health check: `http://localhost:8000/health`
+
+### Execução via Docker
+
+#### Pré-requisitos
+
+- [Docker](https://docs.docker.com/get-docker/) instalado e em execução
+- [Docker Compose](https://docs.docker.com/compose/install/) (já incluído no Docker Desktop)
+
+#### Configurar variáveis de ambiente
+
+O `.env` é obrigatório antes de subir o container (o `.dockerignore` garante que ele não entre na imagem):
+
+```bash
+cp .env.example .env
+# edite o .env com sua LLM_API_KEY e LLM_PROVIDER
+```
+
+#### Subir o serviço
+
+```bash
+# Construir a imagem e iniciar o container
+docker compose up --build
+
+# Ou em segundo plano (modo detached)
+docker compose up --build -d
+```
+
+O serviço estará disponível em `http://localhost:8000`.
+Documentação interativa (Swagger): `http://localhost:8000/docs`
+Health check: `http://localhost:8000/health`
+
+#### Hot reload durante o desenvolvimento
+
+Para que alterações em `src/` sejam refletidas sem rebuildar a imagem, descomente o bloco `volumes` e `command` no `docker-compose.yml`:
+
+```yaml
+volumes:
+  - ./src:/api/src
+command: >
+  python -m uvicorn app.main:app
+  --host 0.0.0.0 --port 8000
+  --app-dir src --reload
+```
+
+E então suba normalmente com `docker compose up`.
+
+#### Comandos úteis
+
+```bash
+# Ver logs em tempo real
+docker compose logs -f ai
+
+# Parar e remover o container
+docker compose down
+
+# Acessar o shell do container
+docker compose exec ai bash
+
+# Rebuildar a imagem após mudar requirements.txt
+docker compose up --build
+```
 
 ## Enviando uma Contribuição
 

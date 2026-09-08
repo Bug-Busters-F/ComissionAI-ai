@@ -1,0 +1,33 @@
+﻿# Arquivos Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Ambiente virtual
+venv/
+.venv/
+
+# Variáveis de ambiente reais (nunca copiar para a imagem)
+.env
+
+# Git
+.git/
+.gitignore
+
+# IDEs
+.idea/
+.vscode/
+
+# Testes / cobertura
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build
+dist/
+build/
+*.egg-info/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
