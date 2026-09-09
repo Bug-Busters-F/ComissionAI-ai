@@ -17,9 +17,7 @@ class Settings(BaseSettings):
     app_port: int = 8000
     app_reload: bool = False
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
 settings = Settings()
