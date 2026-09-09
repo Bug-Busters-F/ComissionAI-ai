@@ -26,10 +26,6 @@ class AnthropicProvider(LLMProvider):
 
     def complete(self, prompt: str, response_schema: dict) -> dict:
         """Chama o Claude com saída estruturada via tool use."""
-    def complete(self, prompt: str, response_schema: dict) -> dict:
-        """Chama o Claude com saída estruturada via tool use."""
-        response = self._client.messages.create(
-
         response = self._client.messages.create(
             model=self._model,
             max_tokens=1024,
