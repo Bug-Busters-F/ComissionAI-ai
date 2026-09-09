@@ -26,7 +26,10 @@ class LLMProvider(ABC):
             Dicionário com os campos definidos pelo response_schema.
 
         Raises:
-            NotImplementedError: Se o método não for implementado.
+        Raises:
+            TypeError: Se uma subclasse não implementar `complete` (levantado
+                       na instanciação, não na chamada).
+            RuntimeError: Em falhas de comunicação com o provedor.
             RuntimeError:        Em falhas de comunicação com o provedor.
         """
         ...
