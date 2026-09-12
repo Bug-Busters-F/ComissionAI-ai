@@ -1,14 +1,14 @@
-﻿# Sprint 1 — Interpretação de Regras
+# Sprint 1 — Interpretação de Regras
 
 **Estado atual:** Sprint 1 em andamento.
-O serviço Python é **stateless e sem tools** nesta sprint: entra texto, sai JSON. Uma chamada ao LLM, sem laço.
+O serviço Python é **stateless e sem tools** nesta sprint: entra texto/contexto, sai JSON de proposta de interpretação compatível com S1-B02. Uma chamada ao LLM, sem laço.
 
 ## Tasks da Sprint 1 (eixo AI)
 
 | ID     | Task                                         | Status     |
 |--------|----------------------------------------------|------------|
 | S1-A01 | Estruturar base do repositório AI            | ✅ Concluída |
-| S1-A02 | Definir esquema estruturado das regras       | ⬜ Pendente  |
+| S1-A02 | Definir esquema estruturado das regras       | ✅ Concluída |
 | S1-A03 | Integrar provedor de LLM e framework         | ⬜ Pendente  |
 | S1-A04 | Implementar interpretação de regras          | ⬜ Pendente  |
 | S1-A05 | Implementar normalização de percentuais e datas | ⬜ Pendente |
@@ -21,77 +21,81 @@ O serviço Python é **stateless e sem tools** nesta sprint: entra texto, sai JS
 ## Fluxo Interno do Serviço (Sprint 1) — Cinco Etapas
 
 ### Etapa 1 — Montagem do Prompt (`core/`)
-Você **monta** o prompt juntando quatro ingredientes:
-1. O texto do gestor
-2. O catálogo formatado como lista de valores permitidos (marcas, lojas, cargos)
-3. Cinco a oito exemplos resolvidos, incluindo dois que terminam em pendência
-4. A regra de ouro: *na dúvida, devolva pendência; nunca invente parâmetro*
-
-> O catálogo no prompt é o que impede o modelo de inventar "marca ROXO". Ele só pode escolher entre o que foi listado.
+Você **monta** o prompt juntando os seguintes elementos:
+1. O comando textual digitado pelo gestor (`texto`)
+2. Metadados de contexto fornecidos pelo Backend (`contexto`, ex.: `ano_referencia`, `canal_padrao`)
+3. Exemplos representativos (one-shot / few-shot), incluindo casos válidos e casos com pendências
+4. A regra fundamental: *na dúvida ou informação ausente, aponte pendências descritivas; nunca invente dados ou parâmetros*
 
 ### Etapa 2 — Chamada ao LLM com saída estruturada (`providers/`)
-Não pedir "responda em JSON" e torcer. Passar o JSON Schema gerado pelo Pydantic
-(`RegraInterpretada.model_json_schema()`) como `response_schema` — o provedor
-obriga o modelo a respeitar o formato.
-
-A resposta do LLM propositalmente chega "suja":
-- `"3%"` ainda é string
-- `"dezembro"` ainda não é data
-
-Normalização é trabalho determinístico — código faz isso melhor e mais barato que LLM.
+Passar o JSON Schema gerado pelo Pydantic (`InterpretacaoRegraResponse.model_json_schema()`) ou instrução estruturada correspondente para garantir conformidade de formato.
 
 ### Etapa 3 — Validação Estrutural (Pydantic)
-O Pydantic checa: os campos existem? Os tipos batem? `operacao` é um valor válido do Enum?
-Se algo estiver fora, levanta `ValidationError` — não deixa chegar na normalização.
+O Pydantic (`InterpretacaoRegraResponse`) valida:
+- Campos suportados: `canal`, `taxa`, `dataInicio`, `dataFim`, `confianca`, `pendencias`
+- Tipos de dados (`Decimal`, `date`, `list[str]`, etc.)
+- Normalização automática de canal (`trim().upper()`)
 
-### Etapa 4 — Normalização (`core/`)
-- `"3%"` → `Decimal("0.0300")`
-- `"dezembro"` + `data_referencia: 2026-09-07` → `2026-12-01` a `2026-12-31`
-- `fim: null` continua `null` — é informação (o gestor não especificou fim); quem aplica o default de 30 dias é o Spring
+### Etapa 4 — Normalização e Validação Semântica (`core/` e Pydantic)
+- `taxa`: proporção decimal numérica no intervalo `0 < taxa <= 1.0000` (ex: `0.0500` para 5%)
+- `dataInicio` / `dataFim`: formato ISO 8601 (`YYYY-MM-DD`)
+- Validação temporal: `dataFim >= dataInicio` quando ambas forem fornecidas
+- `dataFim: null` quando não especificada pelo gestor (o Backend aplicará o default de 30 dias na confirmação)
+- `pendencias`: lista de strings detalhando ambiguidades ou dados essenciais ausentes
 
-### Etapa 5 — Validação Semântica (Pydantic `@model_validator`)
-Confronta o resultado com o catálogo recebido:
-- A loja citada existe no catálogo?
-- Se o texto citou marca, ela bate com a loja?
-- O percentual é plausível? (ex: 300% vira pendência)
-- Combinações de dois campos: `ACRESCENTAR_PONTO_PERCENTUAL` + cargo ambíguo → pendência
+### Etapa 5 — Resposta ao Backend Spring Boot
+Retorno do payload estruturado JSON compatível com o DTO `InterpretacaoRegraResponse`.
 
-Usa `@model_validator(mode="after")`, não `@field_validator` isolado.
+---
 
 ## Exemplo de Requisição (Spring → Python)
 
 ```json
 {
-  "texto": "3% para os vendedores da loja 75 em dezembro",
-  "data_referencia": "2026-09-07",
-  "catalogo": {
-    "marcas": [{"codigo": 10, "nome": "PRETO"}, {"codigo": 20, "nome": "BRANCO"}],
-    "lojas":  [{"codigo": 75, "nome": "...", "marca_codigo": 20}],
-    "cargos": [{"codigo": 100, "descricao": "vendedor de loja"}]
+  "texto": "Pagar 5% no canal ecommerce durante dezembro",
+  "contexto": {
+    "canal_padrao": "ECOMMERCE",
+    "ano_referencia": 2026
   }
 }
 ```
 
-## Exemplo de Resposta (Python → Spring)
+## Exemplo de Resposta Canônica (Python → Spring)
 
 ```json
 {
-  "status": "ok",
-  "operacao": "SUBSTITUIR_PERCENTUAL",
-  "percentual": "0.0300",
-  "publico": {"marca_codigo": null, "loja_codigo": 75, "cargo_codigo": 100, "matricula": null},
-  "inicio": "2026-12-01",
-  "fim": "2026-12-31",
-  "pendencias": [],
-  "texto_original": "3% para os vendedores da loja 75 em dezembro"
+  "canal": "ECOMMERCE",
+  "taxa": 0.0500,
+  "dataInicio": "2026-12-01",
+  "dataFim": "2026-12-31",
+  "confianca": 0.95,
+  "pendencias": []
 }
 ```
 
-Se houver pendência, `status` é `"pendencias"` e o array traz o quê, o porquê e a pergunta a fazer ao usuário.
+Se houver pendências (informações incompletas ou ambíguas):
+
+```json
+{
+  "canal": null,
+  "taxa": null,
+  "dataInicio": null,
+  "dataFim": null,
+  "confianca": 0.30,
+  "pendencias": [
+    "Canal de vendas não identificado.",
+    "Percentual de comissão não identificado.",
+    "Data de início da vigência não identificada."
+  ]
+}
+```
+
+---
 
 ## O que NÃO implementar na Sprint 1
 
-- Tool calling (laço LLM → Spring → LLM) — isso é Sprint 2
+- Tool calling (laço LLM → Spring → LLM) — Sprint 2
 - Simulação orçamentária — Sprint 2
 - Detecção de anomalias — Sprint 3
-- Persistência de regras pelo serviço Python — nunca (é papel do Spring)
+- Persistência direta de regras pelo serviço Python — papel exclusivo do Spring Boot
+- Campos ausentes no modelo de negócio S1-B02 (`publico`, `marca_codigo`, `loja_codigo`, `cargo_codigo`, `operacao`, `percentual`, etc.)
