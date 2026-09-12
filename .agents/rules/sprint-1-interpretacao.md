@@ -9,7 +9,7 @@ O serviço Python é **stateless e sem tools** nesta sprint: entra texto/context
 |--------|----------------------------------------------|------------|
 | S1-A01 | Estruturar base do repositório AI            | ✅ Concluída |
 | S1-A02 | Definir esquema estruturado das regras       | ✅ Concluída |
-| S1-A03 | Integrar provedor de LLM e framework         | ⬜ Pendente  |
+| S1-A03 | Integrar provedor de LLM e framework         | ✅ Concluída |
 | S1-A04 | Implementar interpretação de regras          | ⬜ Pendente  |
 | S1-A05 | Implementar normalização de percentuais e datas | ⬜ Pendente |
 | S1-A06 | Implementar validação da resposta do modelo  | ⬜ Pendente  |
