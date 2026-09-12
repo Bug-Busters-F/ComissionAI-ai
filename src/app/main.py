@@ -1,4 +1,4 @@
-﻿"""
+"""
 Ponto de entrada do serviço FastAPI.
 
 Camadas:
@@ -11,8 +11,10 @@ Camadas:
 import uvicorn
 from fastapi import FastAPI
 
+from fastapi.responses import JSONResponse
 from app.api.routes.health import router as health_router
 from app.core.config import settings
+from app.core.exceptions import LLMBaseException
 
 app = FastAPI(
     title="Gestão de Regras de Negócio — Serviço IA",
@@ -22,6 +24,18 @@ app = FastAPI(
     ),
     version="0.1.0",
 )
+
+
+@app.exception_handler(LLMBaseException)
+async def llm_exception_handler(request, exc: LLMBaseException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "detail": exc.message,
+            "error_code": exc.error_code,
+        },
+    )
+
 
 # --- Routers ---
 app.include_router(health_router)
