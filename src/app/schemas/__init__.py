@@ -2,7 +2,8 @@
 Módulo de Schemas Pydantic da aplicação.
 """
 
-from src.app.schemas.regra import (
+from app.schemas.raw import InterpretacaoRegraRawLLM
+from app.schemas.regra import (
     InterpretacaoRegraRequest,
     InterpretacaoRegraResponse,
 )
@@ -10,4 +11,5 @@ from src.app.schemas.regra import (
 __all__ = [
     "InterpretacaoRegraRequest",
     "InterpretacaoRegraResponse",
+    "InterpretacaoRegraRawLLM",
 ]
