@@ -74,15 +74,34 @@ cp .env.example .env
 
 Edite o `.env` com os valores corretos:
 
-| Variável       | Descrição                                           | Exemplo               |
-|----------------|-----------------------------------------------------|-----------------------|
-| `LLM_PROVIDER` | Provedor de LLM a usar                              | `gemini`              |
-| `LLM_API_KEY`  | Chave de API do provedor                            | `AIza...`             |
-| `LLM_MODEL`    | Modelo específico (deixe vazio para usar o default) | `gemini-1.5-flash`    |
-| `APP_PORT`     | Porta em que o serviço sobe                         | `8000`                |
-| `APP_RELOAD`   | Hot reload para desenvolvimento                     | `true`                |
+| Variável                | Descrição                                                    | Exemplo            | Padrão               |
+|-------------------------|--------------------------------------------------------------|--------------------|----------------------|
+| `LLM_PROVIDER`          | Provedor de LLM (`gemini`, `openai` ou `anthropic`)          | `gemini`           | `gemini`             |
+| `LLM_API_KEY`           | Chave de API do provedor configurado                         | `AIza...`          | `""` (obrigatória)   |
+| `LLM_MODEL`             | Modelo específico (vazio usa o padrão do provedor)           | `gemini-1.5-flash` | `gemini-1.5-flash`   |
+| `LLM_TEMPERATURE`       | Temperatura de inferência (0.0 para determinismo estruturado)| `0.0`              | `0.0`                |
+| `LLM_TIMEOUT_SECONDS`   | Tempo limite em segundos para a chamada ao provedor          | `30`               | `30`                 |
+| `LLM_MAX_OUTPUT_TOKENS` | Limite máximo de tokens gerados na resposta                  | `1024`             | `1024`               |
+| `APP_HOST`              | Host em que o servidor FastAPI escuta                        | `0.0.0.0`          | `0.0.0.0`            |
+| `APP_PORT`              | Porta em que o serviço sobe                                  | `8000`             | `8000`               |
+| `APP_RELOAD`            | Hot reload para desenvolvimento local                        | `true`             | `false`              |
 
 > **Nunca versione o arquivo `.env`.** Ele já está no `.gitignore`.
+
+### Executando os Testes
+
+Para executar toda a suíte de testes unitários e de integração manualmente:
+
+```bash
+# A partir da raiz do repositório, com o ambiente virtual (venv) ativo:
+python -m unittest discover -s tests
+
+# Para rodar um arquivo de teste específico em modo verboso:
+python -m unittest -v tests/test_schemas_regra.py
+python -m unittest -v tests/test_providers.py
+python -m unittest -v tests/test_exceptions.py
+python -m unittest -v tests/test_api_exceptions.py
+```
 
 ### Inicialização Local
 

@@ -1,4 +1,4 @@
-﻿from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     llm_provider: str = "gemini"
     llm_api_key: str = ""
     llm_model: str = ""
+    llm_temperature: float = 0.0
+    llm_timeout_seconds: int = 30
+    llm_max_output_tokens: int = 1024
 
     # --- API ---
     app_host: str = "0.0.0.0"

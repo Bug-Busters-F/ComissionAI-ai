@@ -1,4 +1,4 @@
-﻿"""
+"""
 Contrato base para todos os provedores de LLM (Strategy Pattern).
 
 Todo provedor concreto deve herdar de LLMProvider e implementar
@@ -26,8 +26,10 @@ class LLMProvider(ABC):
             Dicionário com os campos definidos pelo response_schema.
 
         Raises:
-            TypeError: Se uma subclasse não implementar `complete` (levantado
-                       na instanciação, não na chamada).
-            RuntimeError: Em falhas de comunicação com o provedor.
+            LLMAuthenticationError: Se a chave de API for inválida ou não autorizada.
+            LLMRateLimitError: Se a cota ou limite de requisições do provedor for excedido.
+            LLMTimeoutError: Se o provedor demorar mais que o tempo limite configurado.
+            LLMProviderError: Em falhas internas, de conexão ou indisponibilidade do serviço.
+            LLMResponseParsingError: Se a resposta retornada não puder ser convertida em JSON.
         """
         ...
