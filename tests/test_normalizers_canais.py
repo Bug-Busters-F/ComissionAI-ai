@@ -40,8 +40,40 @@ class TestNormalizadorCanais(unittest.TestCase):
     def test_normalizar_canal_ausente_sem_contexto(self):
         canal, pendencias = normalizar_canal(None, {})
         self.assertIsNone(canal)
+        self.assertEqual(pendencias, [])
+
+    def test_dicionario_dimensoes_canais_tem_prioridade(self):
+        """Canal no dicionario_dimensoes tem prioridade sobre lista interna MVP."""
+        contexto = {
+            "dicionario_dimensoes": {
+                "canais": ["LOJA_FISICA", "ECOMMERCE", "APP"],
+            }
+        }
+        canal, pendencias = normalizar_canal("APP", contexto)
+        self.assertEqual(canal, "APP")
+        self.assertEqual(pendencias, [])
+
+    def test_dicionario_dimensoes_canais_rejeita_canal_fora_do_catalogo(self):
+        """Canal fora do catálogo enviado deve gerar pendência mesmo que seja padrão MVP."""
+        contexto = {
+            "dicionario_dimensoes": {
+                "canais": ["LOJA_FISICA"],  # catálogo restrito enviado pelo backend
+            }
+        }
+        canal, pendencias = normalizar_canal("ECOMMERCE", contexto)
+        self.assertIsNone(canal)
         self.assertEqual(len(pendencias), 1)
-        self.assertIn("não identificado", pendencias[0])
+
+    def test_dicionario_dimensoes_sem_canais_usa_fallback(self):
+        """Se dicionario_dimensoes não tem 'canais', usa fallback legado."""
+        contexto = {
+            "dicionario_dimensoes": {
+                "marcas": {"10": "PRETO"},
+            }
+        }
+        canal, pendencias = normalizar_canal("ECOMMERCE", contexto)
+        self.assertEqual(canal, "ECOMMERCE")
+        self.assertEqual(pendencias, [])
 
 
 if __name__ == "__main__":

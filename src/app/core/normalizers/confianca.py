@@ -23,18 +23,21 @@ def calcular_confianca(
     criterios_nao_suportados: list[str] | None = None,
     ambiguidades: list[str] | None = None,
     pendencias_normalizacao: list[str] | None = None,
+    cod_marca: int | None = None,
+    cod_cargo: int | None = None,
+    cod_loja: int | None = None,
 ) -> Decimal:
     """
     Calcula deterministicamente o score de confiança técnica da interpretação.
 
     Pesos base:
     - Taxa válida: +0.40
-    - Canal válido: +0.35
+    - Escopo/Público válido (canal, marca, cargo ou loja): +0.35
     - Data de início válida: +0.25
     Total máximo de base: 1.00
 
     Penalizações:
-    - Dimensões não suportadas (loja, marca, cargo, etc.): -0.20 por ocorrência
+    - Critérios não suportados no MVP (categoria, região, etc.): -0.20 por ocorrência
     - Ambiguidades identificadas: -0.15 por ocorrência
     - Erros de normalização/pendências estruturais: -0.15 por ocorrência
 
@@ -47,7 +50,8 @@ def calcular_confianca(
     if taxa is not None:
         score += Decimal("0.40")
 
-    if canal is not None:
+    # Escopo: atendido por canal OU por qualquer dimensão de público (marca, cargo, loja)
+    if canal is not None or cod_marca is not None or cod_cargo is not None or cod_loja is not None:
         score += Decimal("0.35")
 
     if data_inicio is not None:

@@ -11,6 +11,17 @@ REGISTRO DE DIMENSÕES DO MODELO (S1-A02)
    - `canal`: Canal de venda (String em caixa alta, ex: ECOMMERCE, LOJA_FISICA, WHATSAPP).
      * IMPORTANTE: O canal NÃO pode ser inferido automaticamente como marca ou loja.
      * Qualquer alteração/substituição do canal no backlog exige alinhamento com o cliente.
+     * `canal` é NULLABLE no banco (tb_regra.canal passou a ser opcional após Correção 2).
+   - `codMarca`: Código numérico da marca (Integer | None). Ex: 10 = PRETO.
+   - `descrMarca`: Nome da marca em maiúsculas (String | None). Ex: "PRETO".
+   - `codCargo`: Código numérico do cargo (Integer | None). Ex: 100 = VENDEDOR LOJA.
+   - `descriCargo`: Descrição da função (String | None). Ex: "VENDEDOR LOJA".
+     * IMPORTANTE: `codCargo` e `descriCargo` são resolvidos em conjunto. Quando
+       houver ambiguidade entre funções que compartilham o mesmo código numérico (ex: 150
+       para "GERENTE DE LOJA" ou "GERENTE QUIOSQUE"), `codCargo` retorna o código comum (150)
+       e `descriCargo` retorna None acompanhado de pendência descritiva. Se os candidatos
+       possuírem códigos distintos, ambos retornam None.
+   - `codLoja`: Código numérico da loja (Integer | None). Ex: 75.
    - `taxa`: Taxa decimal de comissão (BigDecimal/Decimal, intervalo 0 < taxa <= 1.0000).
    - `dataInicio`: Data inicial da vigência (LocalDate/ISO 8601 YYYY-MM-DD).
    - `dataFim`: Data final da vigência (LocalDate/ISO 8601 YYYY-MM-DD | None).
@@ -19,8 +30,7 @@ REGISTRO DE DIMENSÕES DO MODELO (S1-A02)
    - `pendencias`: Lista de pendências e apontamentos de ambiguidades (List[str]).
 
 2. Dimensões Ausentes / Não Suportadas no Modelo Atual:
-   - `marca`, `loja`, `cargo`, `matricula` (antigo objeto `publico`): NÃO pertencem ao modelo
-     de dados MVP de Regra.
+   - `matricula`: Não faz parte do escopo de Sprint 1.
    - `operacao`, `percentual` (substituído por `taxa`), `inicio`/`fim` (substituídos por
      `dataInicio`/`dataFim`): NÃO devem ser gerados.
    - `status`, `id`, `campanha_id`, `criadoEm`, `atualizadoEm`, `removidoEm`: Controlados
@@ -28,8 +38,9 @@ REGISTRO DE DIMENSÕES DO MODELO (S1-A02)
    - `texto_original`: Não faz parte da resposta da IA.
 
 3. Representação de Campos Ausentes ou Ambíguos:
-   - Durante a interpretação, campos não identificados retornam explicitamente como `None` (`null`),
-     e uma mensagem descritiva do problema é adicionada à lista `pendencias`.
+   - Durante a interpretação, campos não identificados retornam explicitamente como `None` (`null`).
+   - O Backend decide se campos nulos geram pendências; a IA apenas sinaliza em `pendencias`
+     quando há ambiguidade real (ex.: dois cargos possíveis para o mesmo código).
    - Quando `dataFim` for `None`, a IA não inventa vigência; o Backend adiciona a pendência
      informativa de que aplicará 30 dias de vigência padrão na confirmação.
 ================================================================================
@@ -45,27 +56,46 @@ class InterpretacaoRegraRequest(BaseModel):
     """
     Payload de entrada enviado pelo Backend Spring Boot para o serviço de IA.
     Espelha o DTO InterpretacaoRegraRequest do Spring Boot.
+
+    O campo `contexto.dicionario_dimensoes` pode conter:
+    - `marcas`: dict[str, str] — mapa de código (str) → nome da marca (ex: {"10": "PRETO"})
+    - `cargos`: dict[str, str] — mapa de código (str) → nome do cargo (ex: {"100": "VENDEDOR LOJA"})
+    - `canais`: list[str] — lista de canais disponíveis (ex: ["LOJA_FISICA", "ECOMMERCE"])
     """
 
     texto: str = Field(
         ...,
         description="Comando em linguagem natural digitado pelo gestor.",
-        examples=["Pagar 5% no canal ecommerce durante dezembro"],
+        examples=["Comissão de 3.5% para os vendedores da marca PRETO na loja 75 durante todo o mês de outubro de 2026"],
     )
     contexto: dict[str, Any] = Field(
         default_factory=dict,
-        description="Metadados contextuais opcionais (ex.: ano_referencia, canal_padrao).",
-        examples=[{"canal_padrao": "ECOMMERCE", "ano_referencia": 2026}],
+        description=(
+            "Metadados contextuais opcionais. Pode conter `ano_referencia` (int), "
+            "`canal_padrao` (str) e `dicionario_dimensoes` com catálogo de marcas, cargos e canais."
+        ),
+        examples=[{
+            "ano_referencia": 2026,
+            "dicionario_dimensoes": {
+                "marcas": {"10": "PRETO", "20": "BRANCO"},
+                "cargos": {"100": "VENDEDOR LOJA", "150": "GERENTE DE LOJA"},
+                "canais": ["LOJA_FISICA", "ECOMMERCE"],
+            },
+        }],
     )
 
     model_config = ConfigDict(
         extra="ignore",
         json_schema_extra={
             "example": {
-                "texto": "Pagar 5% no canal ecommerce durante dezembro",
+                "texto": "Comissão de 3.5% para os vendedores da marca PRETO na loja 75 durante todo o mês de outubro de 2026",
                 "contexto": {
-                    "canal_padrao": "ECOMMERCE",
                     "ano_referencia": 2026,
+                    "dicionario_dimensoes": {
+                        "marcas": {"10": "PRETO", "20": "BRANCO", "30": "AZUL"},
+                        "cargos": {"100": "VENDEDOR LOJA", "150": "GERENTE DE LOJA", "200": "VENDEDOR BALCAO"},
+                        "canais": ["LOJA_FISICA", "ECOMMERCE", "BALCAO", "QUIOSQUE", "APP", "PADRAO"],
+                    },
                 },
             }
         },
@@ -80,7 +110,27 @@ class InterpretacaoRegraResponse(BaseModel):
 
     canal: str | None = Field(
         default=None,
-        description="Canal de venda normalizado em caixa alta (ex.: ECOMMERCE, LOJA_FISICA).",
+        description="Canal de venda normalizado em caixa alta (ex.: ECOMMERCE, LOJA_FISICA). Opcional — o banco aceita null.",
+    )
+    codMarca: int | None = Field(
+        default=None,
+        description="Código numérico da marca (ex.: 10 para PRETO). None se não identificada no texto.",
+    )
+    descrMarca: str | None = Field(
+        default=None,
+        description="Nome da marca em maiúsculas (ex.: 'PRETO'). None se não identificada no texto.",
+    )
+    codCargo: int | None = Field(
+        default=None,
+        description="Código numérico do cargo (ex.: 100 para VENDEDOR LOJA). None se não identificado ou ambíguo.",
+    )
+    descriCargo: str | None = Field(
+        default=None,
+        description="Descrição da função (ex.: 'VENDEDOR LOJA'). Resolvido em conjunto com codCargo. None se ambíguo.",
+    )
+    codLoja: int | None = Field(
+        default=None,
+        description="Código numérico da loja (ex.: 75). None se não identificada no texto.",
     )
     taxa: Decimal | None = Field(
         default=None,
@@ -106,6 +156,22 @@ class InterpretacaoRegraResponse(BaseModel):
     @field_validator("canal", mode="before")
     @classmethod
     def normalizar_canal(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            cleaned = value.strip().upper()
+            return cleaned if cleaned else None
+        return value
+
+    @field_validator("descrMarca", mode="before")
+    @classmethod
+    def normalizar_descr_marca(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            cleaned = value.strip().upper()
+            return cleaned if cleaned else None
+        return value
+
+    @field_validator("descriCargo", mode="before")
+    @classmethod
+    def normalizar_descri_cargo(cls, value: Any) -> Any:
         if isinstance(value, str):
             cleaned = value.strip().upper()
             return cleaned if cleaned else None
@@ -146,15 +212,25 @@ class InterpretacaoRegraResponse(BaseModel):
         json_schema_extra={
             "examples": [
                 {
-                    "canal": "ECOMMERCE",
-                    "taxa": 0.0500,
-                    "dataInicio": "2026-12-01",
-                    "dataFim": "2026-12-31",
+                    "canal": "LOJA_FISICA",
+                    "codMarca": 10,
+                    "descrMarca": "PRETO",
+                    "codCargo": 100,
+                    "descriCargo": "VENDEDOR LOJA",
+                    "codLoja": 75,
+                    "taxa": 0.0350,
+                    "dataInicio": "2026-10-01",
+                    "dataFim": "2026-10-31",
                     "confianca": 0.95,
                     "pendencias": [],
                 },
                 {
                     "canal": "ECOMMERCE",
+                    "codMarca": None,
+                    "descrMarca": None,
+                    "codCargo": None,
+                    "descriCargo": None,
+                    "codLoja": None,
                     "taxa": 0.0500,
                     "dataInicio": "2026-10-01",
                     "dataFim": None,
@@ -163,12 +239,17 @@ class InterpretacaoRegraResponse(BaseModel):
                 },
                 {
                     "canal": None,
+                    "codMarca": None,
+                    "descrMarca": None,
+                    "codCargo": 150,
+                    "descriCargo": None,
+                    "codLoja": None,
                     "taxa": None,
                     "dataInicio": None,
                     "dataFim": None,
                     "confianca": 0.30,
                     "pendencias": [
-                        "Canal de vendas não identificado.",
+                        "Ambiguidade de cargo: 'gerentes' pode referir-se a 'GERENTE DE LOJA' ou 'GERENTE QUIOSQUE'.",
                         "Percentual de comissão não identificado.",
                         "Data de início da vigência não identificada.",
                     ],

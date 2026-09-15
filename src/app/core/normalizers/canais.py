@@ -45,18 +45,35 @@ def _normalizar_string(texto: str) -> str:
 
 
 def _obter_canais_permitidos(contexto: dict[str, Any] | None) -> list[str]:
-    """Extrai lista de canais permitidos do contexto se existir, caso contrário retorna CANAIS_PADRAO_MVP."""
+    """Extrai lista de canais permitidos do contexto.
+
+    Ordem de prioridade:
+    1. `contexto.dicionario_dimensoes.canais` — catálogo enviado pelo Backend (novo contrato).
+    2. `contexto.canais_permitidos` — chave legada direta.
+    3. `contexto.canais_disponiveis` — chave legada direta.
+    4. `contexto.catalogo.canais` — catálogo aninhado legado.
+    5. `CANAIS_PADRAO_MVP` — fallback interno quando nenhum catálogo for fornecido.
+    """
     if contexto:
+        # 1. Novo contrato: dicionario_dimensoes.canais
+        dim = contexto.get("dicionario_dimensoes")
+        if isinstance(dim, dict) and isinstance(dim.get("canais"), list):
+            return [str(c).upper() for c in dim["canais"]]
+
+        # 2-3. Chaves legadas diretas
         if "canais_permitidos" in contexto and isinstance(contexto["canais_permitidos"], list):
             return [str(c).upper() for c in contexto["canais_permitidos"]]
         if "canais_disponiveis" in contexto and isinstance(contexto["canais_disponiveis"], list):
             return [str(c).upper() for c in contexto["canais_disponiveis"]]
+
+        # 4. Catálogo aninhado legado
         if "catalogo" in contexto and isinstance(contexto["catalogo"], dict):
             if "canais" in contexto["catalogo"] and isinstance(contexto["catalogo"]["canais"], list):
                 return [
                     c.get("nome", "").upper() if isinstance(c, dict) else str(c).upper()
                     for c in contexto["catalogo"]["canais"]
                 ]
+
     return CANAIS_PADRAO_MVP
 
 
@@ -89,7 +106,8 @@ def normalizar_canal(
                 )
                 return None, pendencias
 
-        pendencias.append("Canal de vendas não identificado no texto.")
+        # canal é opcional/nullable no novo contrato (tb_regra.canal NULLABLE).
+        # Se não informado e sem canal_padrao, retorna None sem gerar pendência.
         return None, pendencias
 
     # 2. Normalizar texto e resolver sinônimos

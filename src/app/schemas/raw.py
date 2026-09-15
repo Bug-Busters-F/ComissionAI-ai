@@ -3,11 +3,10 @@ Esquema intermediário de extração bruta pelo LLM (Task S1-A04).
 
 Este esquema é usado exclusivamente como `response_schema` para a chamada estruturada
 ao provedor de LLM. Ele permite que o modelo extraia termos textuais/brutos de taxas,
-períodos de vigência e dimensões não suportadas sem realizar conversões determinísticas,
-as quais são delegadas às camadas determinísticas em Python.
+períodos de vigência, canal e dimensões de negócio (marca, loja, cargo) sem realizar
+conversões determinísticas, as quais são delegadas às camadas determinísticas em Python.
 """
 
-from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -30,27 +29,59 @@ class InterpretacaoRegraRawLLM(BaseModel):
     )
     vigencia_fim_raw: str | None = Field(
         default=None,
-        description="Expressão textual ou data referente ao término da vigência se explicitada (ex: 'dezembro', '2026-12-31', '31/12/2026'). None se não informada.",
+        description=(
+            "Expressão textual ou data referente ao término da vigência se explicitada "
+            "(ex: 'dezembro', '2026-12-31', '31/12/2026'). None se não informada."
+        ),
     )
     criterios_nao_suportados: list[str] = Field(
         default_factory=list,
-        description="Lista de critérios ou dimensões mencionadas que NÃO são suportadas no MVP (ex: 'loja 75', 'marca PRETO', 'cargo vendedor', 'produto XYZ').",
+        description=(
+            "Lista de critérios ou dimensões mencionadas que NÃO são suportadas no MVP "
+            "(ex: 'produto XYZ', 'região Sul', 'categoria smartphones'). "
+            "NÃO incluir marca, loja, cargo ou canal — esses são suportados e possuem campos próprios."
+        ),
     )
     ambiguidades_ou_duvidas: list[str] = Field(
         default_factory=list,
         description="Lista de ambiguidades, termos vagos ou inconsistências identificadas no texto.",
+    )
+    marca_raw: str | None = Field(
+        default=None,
+        description=(
+            "Nome ou expressão textual da marca identificada no texto "
+            "(ex: 'PRETO', 'marca Branco'). None se não mencionada."
+        ),
+    )
+    loja_raw: str | None = Field(
+        default=None,
+        description=(
+            "Código numérico ou expressão textual da loja identificada no texto "
+            "(ex: '75', 'loja 35'). None se não mencionada."
+        ),
+    )
+    cargo_raw: str | None = Field(
+        default=None,
+        description=(
+            "Nome ou expressão textual do cargo/função identificado no texto "
+            "(ex: 'vendedores', 'gerentes de loja', 'ASSISTENTE DE VENDAS'). "
+            "None se não mencionado."
+        ),
     )
 
     model_config = ConfigDict(
         extra="ignore",
         json_schema_extra={
             "example": {
-                "canal": "ECOMMERCE",
-                "taxa_raw": "5%",
-                "vigencia_inicio_raw": "dezembro",
-                "vigencia_fim_raw": "dezembro",
+                "canal": "LOJA_FISICA",
+                "taxa_raw": "3.5%",
+                "vigencia_inicio_raw": "outubro de 2026",
+                "vigencia_fim_raw": "outubro de 2026",
                 "criterios_nao_suportados": [],
                 "ambiguidades_ou_duvidas": [],
+                "marca_raw": "PRETO",
+                "loja_raw": "75",
+                "cargo_raw": "vendedores",
             }
         },
     )
