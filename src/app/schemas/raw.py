@@ -71,17 +71,4 @@ class InterpretacaoRegraRawLLM(BaseModel):
 
     model_config = ConfigDict(
         extra="ignore",
-        json_schema_extra={
-            "example": {
-                "canal": "LOJA_FISICA",
-                "taxa_raw": "3.5%",
-                "vigencia_inicio_raw": "outubro de 2026",
-                "vigencia_fim_raw": "outubro de 2026",
-                "criterios_nao_suportados": [],
-                "ambiguidades_ou_duvidas": [],
-                "marca_raw": "PRETO",
-                "loja_raw": "75",
-                "cargo_raw": "vendedores",
-            }
-        },
     )

@@ -10,34 +10,53 @@ import json
 from typing import Any
 
 
-PROMPT_SISTEMA_REGRAS = """Você é um assistente especialista em interpretar regras de comissão comercial para estruturação no motor MVP do sistema Dom Rock.
+PROMPT_SISTEMA_REGRAS = """Você é um extrator de regras de comissão comercial para o motor MVP do sistema Dom Rock.
 
-SEU OBJETIVO:
-Extrair com precisão os parâmetros da regra de comissão descrita pelo gestor em linguagem natural para o esquema de extração estruturado.
+OBJETIVO:
+Extraia somente as informações explicitamente presentes na regra do gestor.
+Não invente, complete ou corrija informações ausentes.
 
 DIMENSÕES SUPORTADAS NO MVP:
-1. Canal de Venda (`canal`): Canal informado no texto (ex.: ECOMMERCE, LOJA_FISICA, WHATSAPP, TELEVENDAS, BALCAO). Use APENAS canais do catálogo fornecido no contexto. Se não houver catálogo, use os padrões conhecidos.
-2. Taxa/Percentual de Comissão (`taxa_raw`): O valor textual do percentual ou taxa (ex.: '5%', '3,5%', '0.05', '5 por cento').
-3. Vigência Inicial (`vigencia_inicio_raw`): Expressão temporal de início (ex.: 'dezembro', '2026-10-01', '01/11/2026', 'a partir de outubro', '1º trimestre').
-4. Vigência Final (`vigencia_fim_raw`): Expressão temporal de término se informada (ex.: 'dezembro', '2026-12-31', '31/12/2026', '1º trimestre'). Se não informada, retornar null.
-5. Marca (`marca_raw`): Nome ou expressão da marca identificada no texto (ex.: 'PRETO', 'marca Branco'). Use APENAS marcas do catálogo fornecido. Retornar null se não mencionada.
-6. Loja (`loja_raw`): Código numérico ou expressão da loja identificada (ex.: '75', 'loja 35'). Retornar null se não mencionada.
-7. Cargo/Função (`cargo_raw`): Nome do cargo ou função identificado (ex.: 'vendedores', 'gerentes de loja'). Use APENAS cargos do catálogo fornecido. Retornar null se não mencionado.
+- canal: canal de venda.
+- taxa_raw: percentual/taxa exatamente como aparece no texto.
+- vigencia_inicio_raw: expressão de início da vigência.
+- vigencia_fim_raw: expressão de fim da vigência.
+- marca_raw: marca mencionada.
+- loja_raw: código ou identificação da loja.
+- cargo_raw: cargo/função mencionado.
+
+CATÁLOGO:
+Quando um catálogo for fornecido, use-o para validar marcas, cargos e canais.
+Nunca substitua um valor informado pelo usuário por outro valor do catálogo.
+
+Se um valor mencionado não existir no catálogo:
+- não invente um valor;
+- não substitua por outro;
+- preserve o valor textual em seu campo raw, quando possível;
+- registre a ocorrência em ambiguidades_ou_duvidas.
 
 DIMENSÕES NÃO SUPORTADAS NO MVP:
-O motor do MVP NÃO suporta filtros por:
-- Categoria de produto ou SKU (ex.: 'smartphones', 'linha branca')
-- Região geográfica ou meta de faturamento
-- Matrícula/Colaborador individual
+O MVP não suporta:
+- categoria de produto ou SKU;
+- região geográfica;
+- meta de faturamento;
+- matrícula/colaborador individual.
 
-Registre APENAS esses critérios em `criterios_nao_suportados`. NÃO coloque marca, loja, cargo ou canal nessa lista.
+Registre somente esses critérios em criterios_nao_suportados.
+Marca, loja, cargo e canal nunca devem ser classificados como
+criterios_nao_suportados.
 
-REGRAS OBRIGATÓRIAS:
-1. NUNCA converta marca, loja ou cargo em canal. São dimensões independentes com campos próprios.
-2. NUNCA invente canais, taxas, marcas, cargos ou datas não mencionadas. Se uma informação faltar ou estiver vaga, aponte em `ambiguidades_ou_duvidas`.
-3. Se o texto for apenas 'em dezembro' ou 'em outubro', tanto `vigencia_inicio_raw` quanto `vigencia_fim_raw` devem registrar o mês correspondente. Se for 'a partir de outubro', `vigencia_inicio_raw` é 'outubro' e `vigencia_fim_raw` é null.
-4. Use o catálogo de marcas e cargos fornecido no contexto para extrair os nomes exatos.
-5. Na dúvida, gere pendência em `ambiguidades_ou_duvidas`. Nunca invente dados.
+REGRAS:
+1. Marca, loja, cargo e canal são dimensões independentes.
+2. Nunca converta uma dimensão em outra.
+3. Não invente taxas, datas, canais, marcas, lojas ou cargos.
+4. Preserve os valores raw conforme aparecem no texto.
+5. Use null quando um campo não for mencionado.
+6. Use ambiguidades_ou_duvidas quando houver informação mencionada,
+   mas insuficiente ou ambígua para determinar o valor com segurança.
+7. A ausência de um campo, por si só, não é uma ambiguidade.
+8. Não faça conversões numéricas ou de datas nesta etapa.
+9. Retorne somente os campos definidos no schema.
 """
 
 FEW_SHOT_EXAMPLES = [
@@ -97,42 +116,6 @@ FEW_SHOT_EXAMPLES = [
             "cargo_raw": None,
         },
     },
-    {
-        "input": "Pagar comissão especial para os gerentes",
-        "output": {
-            "canal": None,
-            "taxa_raw": None,
-            "vigencia_inicio_raw": None,
-            "vigencia_fim_raw": None,
-            "criterios_nao_suportados": [],
-            "ambiguidades_ou_duvidas": [
-                "Percentual/taxa de comissão não informado",
-                "Canal de vendas não informado",
-                "Data de início da vigência não informada",
-                "Ambiguidade de cargo: 'gerentes' pode referir-se a múltiplas funções no catálogo",
-            ],
-            "marca_raw": None,
-            "loja_raw": None,
-            "cargo_raw": "gerentes",
-        },
-    },
-    {
-        "input": "Dar um bônus especial no próximo mês",
-        "output": {
-            "canal": None,
-            "taxa_raw": None,
-            "vigencia_inicio_raw": "próximo mês",
-            "vigencia_fim_raw": None,
-            "criterios_nao_suportados": ["bônus especial"],
-            "ambiguidades_ou_duvidas": [
-                "Percentual/taxa de comissão não informado",
-                "Canal de vendas não informado",
-            ],
-            "marca_raw": None,
-            "loja_raw": None,
-            "cargo_raw": None,
-        },
-    },
 ]
 
 
@@ -181,7 +164,7 @@ def montar_prompt_interpretacao(
     """
     contexto = contexto or {}
     contexto_resumido = {k: v for k, v in contexto.items() if k != "dicionario_dimensoes"}
-    contexto_str = json.dumps(contexto_resumido, ensure_ascii=False, indent=2)
+    contexto_str = json.dumps(contexto_resumido, ensure_ascii=False, separators=(",", ":"))
 
     catalogo_str = _formatar_catalogo(contexto)
 
@@ -190,7 +173,7 @@ def montar_prompt_interpretacao(
         exemplos_formatados.append(
             f"Exemplo {i}:\n"
             f"Entrada: \"{ex['input']}\"\n"
-            f"Saída: {json.dumps(ex['output'], ensure_ascii=False)}"
+            f"Saída: {json.dumps(ex['output'], ensure_ascii=False, separators=(",", ":"))}"
         )
 
     exemplos_str = "\n\n".join(exemplos_formatados)

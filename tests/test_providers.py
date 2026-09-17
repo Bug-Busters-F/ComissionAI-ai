@@ -31,8 +31,10 @@ class TestProviderFactory(unittest.TestCase):
     def test_provider_gemini_sem_api_key_lanca_auth_error(self):
         with patch("app.core.config.settings.llm_provider", "gemini"):
             with patch("app.core.config.settings.llm_api_key", ""):
-                fake_genai = types.ModuleType("google.generativeai")
-                with patch.dict(sys.modules, {"google.generativeai": fake_genai}):
+                fake_genai = types.ModuleType("google.genai")
+                fake_google = types.ModuleType("google")
+                fake_google.genai = fake_genai
+                with patch.dict(sys.modules, {"google": fake_google, "google.genai": fake_genai}):
                     with self.assertRaises(LLMAuthenticationError):
                         get_provider()
 
@@ -57,95 +59,140 @@ class TestProviderFactory(unittest.TestCase):
 
 class TestGeminiProvider(unittest.TestCase):
     def setUp(self):
-        self.fake_genai = types.ModuleType("google.generativeai")
-        self.fake_genai.configure = MagicMock()
-        self.fake_genai.GenerativeModel = MagicMock()
-        self.fake_genai.GenerationConfig = MagicMock()
+        self.fake_genai = types.ModuleType("google.genai")
+        self.fake_genai.Client = MagicMock()
+        self.fake_types = types.ModuleType("google.genai.types")
+        self.fake_types.GenerateContentConfig = MagicMock()
+        self.fake_types.HttpOptions = MagicMock()
 
-        self.fake_exceptions = types.ModuleType("google.api_core.exceptions")
-        class GoogleAPIError(Exception): pass
-        class GoogleAPICallError(GoogleAPIError): pass
-        class Unauthenticated(GoogleAPICallError): pass
-        class PermissionDenied(GoogleAPICallError): pass
-        class ResourceExhausted(GoogleAPICallError): pass
-        class TooManyRequests(GoogleAPICallError): pass
-        class DeadlineExceeded(GoogleAPICallError): pass
+        self.fake_errors = types.ModuleType("google.genai.errors")
 
-        self.fake_exceptions.GoogleAPIError = GoogleAPIError
-        self.fake_exceptions.GoogleAPICallError = GoogleAPICallError
-        self.fake_exceptions.Unauthenticated = Unauthenticated
-        self.fake_exceptions.PermissionDenied = PermissionDenied
-        self.fake_exceptions.ResourceExhausted = ResourceExhausted
-        self.fake_exceptions.TooManyRequests = TooManyRequests
-        self.fake_exceptions.DeadlineExceeded = DeadlineExceeded
+        class APIError(Exception):
+            def __init__(self, code=0, response_json=None, response=None):
+                self.code = code
+                self.message = (
+                    response_json.get("error", {}).get("message", "")
+                    if isinstance(response_json, dict)
+                    else str(response_json)
+                )
+                super().__init__(self.message)
+
+        class ClientError(APIError):
+            pass
+
+        class ServerError(APIError):
+            pass
+
+        self.fake_errors.APIError = APIError
+        self.fake_errors.ClientError = ClientError
+        self.fake_errors.ServerError = ServerError
+
+        self.fake_google = types.ModuleType("google")
+        self.fake_google.genai = self.fake_genai
 
     def test_gemini_complete_sucesso(self):
-        with patch.dict(sys.modules, {
-            "google.generativeai": self.fake_genai,
-            "google.api_core.exceptions": self.fake_exceptions,
-        }):
+        with patch.dict(
+            sys.modules,
+            {
+                "google": self.fake_google,
+                "google.genai": self.fake_genai,
+                "google.genai.types": self.fake_types,
+                "google.genai.errors": self.fake_errors,
+            },
+        ):
             with patch("app.core.config.settings.llm_api_key", "fake-gemini-key"):
                 from app.providers.gemini import GeminiProvider
+
                 provider = GeminiProvider()
 
                 mock_response = MagicMock()
                 mock_response.text = '{"canal": "ECOMMERCE", "taxa": 0.05}'
-                provider._model.generate_content.return_value = mock_response
+                provider._client.models.generate_content.return_value = mock_response
 
                 result = provider.complete("teste prompt", {})
                 self.assertEqual(result, {"canal": "ECOMMERCE", "taxa": 0.05})
 
     def test_gemini_unauthenticated_error(self):
-        with patch.dict(sys.modules, {
-            "google.generativeai": self.fake_genai,
-            "google.api_core.exceptions": self.fake_exceptions,
-        }):
+        with patch.dict(
+            sys.modules,
+            {
+                "google": self.fake_google,
+                "google.genai": self.fake_genai,
+                "google.genai.types": self.fake_types,
+                "google.genai.errors": self.fake_errors,
+            },
+        ):
             with patch("app.core.config.settings.llm_api_key", "secret-key-123"):
                 from app.providers.gemini import GeminiProvider
+
                 provider = GeminiProvider()
-                provider._model.generate_content.side_effect = self.fake_exceptions.Unauthenticated("Invalid API key")
+                provider._client.models.generate_content.side_effect = self.fake_errors.ClientError(
+                    401, {"error": {"message": "Invalid API key"}}
+                )
 
                 with self.assertRaises(LLMAuthenticationError) as ctx:
                     provider.complete("teste prompt", {})
                 self.assertNotIn("secret-key-123", str(ctx.exception))
 
     def test_gemini_rate_limit_error(self):
-        with patch.dict(sys.modules, {
-            "google.generativeai": self.fake_genai,
-            "google.api_core.exceptions": self.fake_exceptions,
-        }):
+        with patch.dict(
+            sys.modules,
+            {
+                "google": self.fake_google,
+                "google.genai": self.fake_genai,
+                "google.genai.types": self.fake_types,
+                "google.genai.errors": self.fake_errors,
+            },
+        ):
             with patch("app.core.config.settings.llm_api_key", "fake-key"):
                 from app.providers.gemini import GeminiProvider
+
                 provider = GeminiProvider()
-                provider._model.generate_content.side_effect = self.fake_exceptions.ResourceExhausted("Quota limit")
+                provider._client.models.generate_content.side_effect = self.fake_errors.ClientError(
+                    429, {"error": {"message": "Quota limit exceeded"}}
+                )
 
                 with self.assertRaises(LLMRateLimitError):
                     provider.complete("teste prompt", {})
 
     def test_gemini_timeout_error(self):
-        with patch.dict(sys.modules, {
-            "google.generativeai": self.fake_genai,
-            "google.api_core.exceptions": self.fake_exceptions,
-        }):
+        with patch.dict(
+            sys.modules,
+            {
+                "google": self.fake_google,
+                "google.genai": self.fake_genai,
+                "google.genai.types": self.fake_types,
+                "google.genai.errors": self.fake_errors,
+            },
+        ):
             with patch("app.core.config.settings.llm_api_key", "fake-key"):
                 from app.providers.gemini import GeminiProvider
+
                 provider = GeminiProvider()
-                provider._model.generate_content.side_effect = self.fake_exceptions.DeadlineExceeded("Deadline exceeded")
+                provider._client.models.generate_content.side_effect = TimeoutError(
+                    "Deadline exceeded"
+                )
 
                 with self.assertRaises(LLMTimeoutError):
                     provider.complete("teste prompt", {})
 
     def test_gemini_invalid_json_parsing_error(self):
-        with patch.dict(sys.modules, {
-            "google.generativeai": self.fake_genai,
-            "google.api_core.exceptions": self.fake_exceptions,
-        }):
+        with patch.dict(
+            sys.modules,
+            {
+                "google": self.fake_google,
+                "google.genai": self.fake_genai,
+                "google.genai.types": self.fake_types,
+                "google.genai.errors": self.fake_errors,
+            },
+        ):
             with patch("app.core.config.settings.llm_api_key", "fake-key"):
                 from app.providers.gemini import GeminiProvider
+
                 provider = GeminiProvider()
                 mock_response = MagicMock()
                 mock_response.text = "invalid json string"
-                provider._model.generate_content.return_value = mock_response
+                provider._client.models.generate_content.return_value = mock_response
 
                 with self.assertRaises(LLMResponseParsingError):
                     provider.complete("teste prompt", {})
