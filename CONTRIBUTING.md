@@ -59,7 +59,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # 3. Instalar o SDK do provedor de LLM que você vai usar (escolha um)
-pip install google-generativeai   # Gemini
+pip install google-genai          # Gemini
 pip install openai                # OpenAI
 pip install anthropic             # Anthropic
 ```
@@ -78,7 +78,7 @@ Edite o `.env` com os valores corretos:
 |-------------------------|--------------------------------------------------------------|--------------------|----------------------|
 | `LLM_PROVIDER`          | Provedor de LLM (`gemini`, `openai` ou `anthropic`)          | `gemini`           | `gemini`             |
 | `LLM_API_KEY`           | Chave de API do provedor configurado                         | `AIza...`          | `""` (obrigatória)   |
-| `LLM_MODEL`             | Modelo específico (vazio usa o padrão do provedor)           | `gemini-1.5-flash` | `gemini-1.5-flash`   |
+| `LLM_MODEL`             | Modelo específico (vazio usa o padrão do provedor)           | `gemini-3.6-flash` | `gemini-3.6-flash`   |
 | `LLM_TEMPERATURE`       | Temperatura de inferência (0.0 para determinismo estruturado)| `0.0`              | `0.0`                |
 | `LLM_TIMEOUT_SECONDS`   | Tempo limite em segundos para a chamada ao provedor          | `30`               | `30`                 |
 | `LLM_MAX_OUTPUT_TOKENS` | Limite máximo de tokens gerados na resposta                  | `1024`             | `1024`               |

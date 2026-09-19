@@ -10,7 +10,7 @@ O serviço Python é **stateless e sem tools** nesta sprint: entra texto/context
 | S1-A01 | Estruturar base do repositório AI            | ✅ Concluída |
 | S1-A02 | Definir esquema estruturado das regras       | ✅ Concluída |
 | S1-A03 | Integrar provedor de LLM e framework         | ✅ Concluída |
-| S1-A04 | Implementar interpretação de regras          | ⬜ Pendente  |
+| S1-A04 | Implementar interpretação de regras          | ✅ Concluída |
 | S1-A05 | Implementar normalização de percentuais e datas | ⬜ Pendente |
 | S1-A06 | Implementar validação da resposta do modelo  | ⬜ Pendente  |
 | S1-A07 | Tratar regras ambíguas ou incompletas        | ⬜ Pendente  |
@@ -23,25 +23,26 @@ O serviço Python é **stateless e sem tools** nesta sprint: entra texto/context
 ### Etapa 1 — Montagem do Prompt (`core/`)
 Você **monta** o prompt juntando os seguintes elementos:
 1. O comando textual digitado pelo gestor (`texto`)
-2. Metadados de contexto fornecidos pelo Backend (`contexto`, ex.: `ano_referencia`, `canal_padrao`)
-3. Exemplos representativos (one-shot / few-shot), incluindo casos válidos e casos com pendências
-4. A regra fundamental: *na dúvida ou informação ausente, aponte pendências descritivas; nunca invente dados ou parâmetros*
+2. Catálogo de dimensões do banco (`dicionario_dimensoes`: marcas, cargos, canais) — formatado e injetado no prompt
+3. Metadados de contexto (`ano_referencia`, `canal_padrao`)
+4. Exemplos representativos (few-shot), incluindo casos válidos e com pendências
+5. A regra fundamental: *na dúvida ou informação ausente, aponte pendências descritivas; nunca invente dados ou parâmetros*
 
 ### Etapa 2 — Chamada ao LLM com saída estruturada (`providers/`)
-Passar o JSON Schema gerado pelo Pydantic (`InterpretacaoRegraResponse.model_json_schema()`) ou instrução estruturada correspondente para garantir conformidade de formato.
+Passar o JSON Schema gerado pelo Pydantic (`InterpretacaoRegraRawLLM.model_json_schema()`) para garantir conformidade de formato.
+O LLM extrai termos **brutos**: `canal`, `taxa_raw`, `vigencia_inicio_raw`, `vigencia_fim_raw`, `marca_raw`, `loja_raw`, `cargo_raw`.
 
 ### Etapa 3 — Validação Estrutural (Pydantic)
-O Pydantic (`InterpretacaoRegraResponse`) valida:
-- Campos suportados: `canal`, `taxa`, `dataInicio`, `dataFim`, `confianca`, `pendencias`
-- Tipos de dados (`Decimal`, `date`, `list[str]`, etc.)
-- Normalização automática de canal (`trim().upper()`)
+O Pydantic (`InterpretacaoRegraRawLLM`) valida os tipos dos dados brutos retornados pelo LLM.
 
-### Etapa 4 — Normalização e Validação Semântica (`core/` e Pydantic)
-- `taxa`: proporção decimal numérica no intervalo `0 < taxa <= 1.0000` (ex: `0.0500` para 5%)
+### Etapa 4 — Normalização e Validação Semântica (`core/normalizers/`)
+- `taxa`: proporção decimal numérica no intervalo `0 < taxa <= 1.0000`
 - `dataInicio` / `dataFim`: formato ISO 8601 (`YYYY-MM-DD`)
-- Validação temporal: `dataFim >= dataInicio` quando ambas forem fornecidas
-- `dataFim: null` quando não especificada pelo gestor (o Backend aplicará o default de 30 dias na confirmação)
-- `pendencias`: lista de strings detalhando ambiguidades ou dados essenciais ausentes
+- `canal`: normalizado em maiúsculas; opcional (nullable); se ausente e sem `canal_padrao`, retorna `null` sem pendência
+- `marca_raw` → (`codMarca`, `descrMarca`): resolvido por match exato no catálogo `dicionario_dimensoes.marcas`
+- `loja_raw` → `codLoja`: extraído como inteiro do texto
+- `cargo_raw` → (`codCargo`, `descriCargo`): resolvido no catálogo `dicionario_dimensoes.cargos`. Se houver ambiguidade onde os candidatos compartilham o mesmo código (ex: 150 para `GERENTE DE LOJA` e `GERENTE QUIOSQUE`), retorna o código comum (`codCargo: 150`) e `descriCargo: null` com pendência descritiva. Se os códigos divergirem ou não houver match, retorna `null` para ambos com pendência.
+- `confianca`: calculada deterministicamente considerando completude de taxa, vigência e escopo (canal, marca, cargo ou loja)
 
 ### Etapa 5 — Resposta ao Backend Spring Boot
 Retorno do payload estruturado JSON compatível com o DTO `InterpretacaoRegraResponse`.
@@ -52,10 +53,14 @@ Retorno do payload estruturado JSON compatível com o DTO `InterpretacaoRegraRes
 
 ```json
 {
-  "texto": "Pagar 5% no canal ecommerce durante dezembro",
+  "texto": "Comissão de 3.5% para os vendedores da marca PRETO na loja 75 durante todo o mês de outubro de 2026",
   "contexto": {
-    "canal_padrao": "ECOMMERCE",
-    "ano_referencia": 2026
+    "ano_referencia": 2026,
+    "dicionario_dimensoes": {
+      "marcas": {"10": "PRETO", "20": "BRANCO"},
+      "cargos": {"100": "VENDEDOR LOJA", "150": "GERENTE DE LOJA"},
+      "canais": ["LOJA_FISICA", "ECOMMERCE"]
+    }
   }
 }
 ```
@@ -64,10 +69,15 @@ Retorno do payload estruturado JSON compatível com o DTO `InterpretacaoRegraRes
 
 ```json
 {
-  "canal": "ECOMMERCE",
-  "taxa": 0.0500,
-  "dataInicio": "2026-12-01",
-  "dataFim": "2026-12-31",
+  "canal": "LOJA_FISICA",
+  "codMarca": 10,
+  "descrMarca": "PRETO",
+  "codCargo": 100,
+  "descriCargo": "VENDEDOR LOJA",
+  "codLoja": 75,
+  "taxa": 0.0350,
+  "dataInicio": "2026-10-01",
+  "dataFim": "2026-10-31",
   "confianca": 0.95,
   "pendencias": []
 }
@@ -78,12 +88,17 @@ Se houver pendências (informações incompletas ou ambíguas):
 ```json
 {
   "canal": null,
+  "codMarca": null,
+  "descrMarca": null,
+  "codCargo": null,
+  "descriCargo": null,
+  "codLoja": null,
   "taxa": null,
   "dataInicio": null,
   "dataFim": null,
   "confianca": 0.30,
   "pendencias": [
-    "Canal de vendas não identificado.",
+    "Ambiguidade de cargo: 'gerentes' pode referir-se a 'GERENTE DE LOJA' ou 'GERENTE QUIOSQUE'.",
     "Percentual de comissão não identificado.",
     "Data de início da vigência não identificada."
   ]
@@ -98,4 +113,5 @@ Se houver pendências (informações incompletas ou ambíguas):
 - Simulação orçamentária — Sprint 2
 - Detecção de anomalias — Sprint 3
 - Persistência direta de regras pelo serviço Python — papel exclusivo do Spring Boot
-- Campos ausentes no modelo de negócio S1-B02 (`publico`, `marca_codigo`, `loja_codigo`, `cargo_codigo`, `operacao`, `percentual`, etc.)
+- `matricula` — fora do escopo da Sprint 1
+- Campos legados (`publico`, `marca_codigo`, `loja_codigo`, `cargo_codigo`, `operacao`, `percentual`) — substituídos pelos campos individuais do contrato atual

@@ -1,4 +1,4 @@
-﻿# Arquitetura do Sistema — Regras Invariantes
+# Arquitetura do Sistema — Regras Invariantes
 
 Este documento descreve a arquitetura geral do sistema de Gerenciamento de Regras de Negócio
 desenvolvido pelo time Bug Busters para a Dom Rock (6º semestre ADS — Fatec São José dos Campos).
@@ -19,7 +19,7 @@ Se o front chamasse os dois, existiriam duas fontes de validação — nunca fa�
 
 ### 2. O serviço Python NÃO acessa banco de dados
 Tudo que o serviço de IA precisa saber sobre a empresa chega na própria requisição
-(catálogo de marcas, lojas, cargos). Isso mantém o serviço stateless — testável e reescritível.
+(catálogo de marcas, cargos, canais). Isso mantém o serviço stateless — testável e reescritível.
 
 ### 3. O LLM NUNCA é fonte da verdade
 O LLM preenche formulário e escolhe caminhos.
