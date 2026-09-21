@@ -10,10 +10,11 @@ Fluxo de Execução:
 6. Retorno do DTO padronizado InterpretacaoRegraResponse.
 """
 
+import time
 from typing import Any
 from pydantic import ValidationError
 
-from app.core.exceptions import LLMResponseParsingError
+from app.core.exceptions import LLMProviderError, LLMResponseParsingError
 from app.core.normalizers.canais import normalizar_canal
 from app.core.normalizers.confianca import calcular_confianca
 from app.core.normalizers.datas import normalizar_datas
@@ -31,6 +32,8 @@ class InterpretadorRegraService:
     Serviço core responsável pela interpretação de regras de comissão.
     """
 
+    RETRY_BACKOFF_SECONDS = 1.5
+
     def __init__(self, provider: LLMProvider | None = None) -> None:
         self._provider = provider
 
@@ -40,6 +43,21 @@ class InterpretadorRegraService:
         if self._provider is None:
             self._provider = get_provider()
         return self._provider
+
+    def _completar_com_retry(self, prompt: str, schema: dict) -> dict:
+        """
+        Chama o provedor com uma única retentativa em caso de falha transitória
+        (LLMProviderError — ex: "alta demanda" do Gemini).
+
+        Não retenta LLMTimeoutError (já consumiu o orçamento de tempo),
+        LLMAuthenticationError nem LLMRateLimitError (retentar imediatamente
+        não resolve credencial inválida nem cota excedida).
+        """
+        try:
+            return self.provider.complete(prompt=prompt, response_schema=schema)
+        except LLMProviderError:
+            time.sleep(self.RETRY_BACKOFF_SECONDS)
+            return self.provider.complete(prompt=prompt, response_schema=schema)
 
     def interpretar(self, request: InterpretacaoRegraRequest) -> InterpretacaoRegraResponse:
         """
@@ -57,9 +75,9 @@ class InterpretadorRegraService:
         # 1. Montagem do prompt especializado
         prompt = montar_prompt_interpretacao(texto=texto, contexto=contexto)
 
-        # 2. Chamada ao provedor com esquema intermediário bruto
+        # 2. Chamada ao provedor com esquema intermediário bruto (com 1 retry em falha transitória)
         schema = InterpretacaoRegraRawLLM.model_json_schema()
-        raw_dict = self.provider.complete(prompt=prompt, response_schema=schema)
+        raw_dict = self._completar_com_retry(prompt, schema)
 
         # 3. Validação estrutural dos dados brutos retornados pelo LLM
         try:

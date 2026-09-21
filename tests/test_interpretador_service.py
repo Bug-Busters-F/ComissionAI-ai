@@ -5,9 +5,9 @@ Testes unitários para o serviço orquestrador de interpretação de regras (Tas
 from datetime import date
 from decimal import Decimal
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from app.core.exceptions import LLMResponseParsingError
+from app.core.exceptions import LLMProviderError, LLMResponseParsingError, LLMTimeoutError
 from app.core.services.interpretador import InterpretadorRegraService
 from app.providers.base import LLMProvider
 from app.schemas.regra import InterpretacaoRegraRequest
@@ -292,6 +292,62 @@ class TestInterpretadorRegraService(unittest.TestCase):
 
         with self.assertRaises(LLMResponseParsingError):
             service.interpretar(request)
+
+    @patch("app.core.services.interpretador.time.sleep")
+    def test_interpretador_retry_bem_sucedido_apos_falha_transitoria(self, mock_sleep):
+        """1ª chamada falha com LLMProviderError (ex: alta demanda), 2ª tem sucesso."""
+        mock_provider = MagicMock(spec=LLMProvider)
+        mock_provider.complete.side_effect = [
+            LLMProviderError("Alta demanda no provedor."),
+            {
+                "canal": "ECOMMERCE",
+                "taxa_raw": "5%",
+                "vigencia_inicio_raw": "dezembro",
+                "vigencia_fim_raw": "dezembro",
+                "criterios_nao_suportados": [],
+                "ambiguidades_ou_duvidas": [],
+                "marca_raw": None,
+                "loja_raw": None,
+                "cargo_raw": None,
+            },
+        ]
+
+        service = InterpretadorRegraService(provider=mock_provider)
+        request = InterpretacaoRegraRequest(texto="Pagar 5% no ecommerce em dezembro", contexto={})
+
+        response = service.interpretar(request)
+
+        self.assertEqual(response.canal, "ECOMMERCE")
+        self.assertEqual(response.taxa, Decimal("0.0500"))
+        self.assertEqual(mock_provider.complete.call_count, 2)
+        mock_sleep.assert_called_once()
+
+    @patch("app.core.services.interpretador.time.sleep")
+    def test_interpretador_retry_falha_nas_duas_tentativas_propaga_erro(self, mock_sleep):
+        """Se as duas tentativas falharem com LLMProviderError, o erro deve propagar."""
+        mock_provider = MagicMock(spec=LLMProvider)
+        mock_provider.complete.side_effect = LLMProviderError("Alta demanda no provedor.")
+
+        service = InterpretadorRegraService(provider=mock_provider)
+        request = InterpretacaoRegraRequest(texto="Pagar 5% no ecommerce em dezembro", contexto={})
+
+        with self.assertRaises(LLMProviderError):
+            service.interpretar(request)
+
+        self.assertEqual(mock_provider.complete.call_count, 2)
+
+    def test_interpretador_nao_retenta_timeout(self):
+        """LLMTimeoutError não deve ser retentado (já consumiu o orçamento de tempo)."""
+        mock_provider = MagicMock(spec=LLMProvider)
+        mock_provider.complete.side_effect = LLMTimeoutError("Tempo limite excedido.")
+
+        service = InterpretadorRegraService(provider=mock_provider)
+        request = InterpretacaoRegraRequest(texto="Pagar 5% no ecommerce em dezembro", contexto={})
+
+        with self.assertRaises(LLMTimeoutError):
+            service.interpretar(request)
+
+        self.assertEqual(mock_provider.complete.call_count, 1)
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ from fastapi import FastAPI
 
 from fastapi.responses import JSONResponse
 from app.api.routes.health import router as health_router
+from app.api.routes.interpretador import router as interpretador_router
 from app.core.config import settings
 from app.core.exceptions import LLMBaseException
 
@@ -39,8 +40,7 @@ async def llm_exception_handler(request, exc: LLMBaseException):
 
 # --- Routers ---
 app.include_router(health_router)
-
-# S1-A08: adicionar router de interpretação aqui.
+app.include_router(interpretador_router)
 
 
 if __name__ == "__main__":

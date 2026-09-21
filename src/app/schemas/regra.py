@@ -65,9 +65,17 @@ class InterpretacaoRegraRequest(BaseModel):
 
     texto: str = Field(
         ...,
+        min_length=1,
         description="Comando em linguagem natural digitado pelo gestor.",
         examples=["Comissão de 3.5% para os vendedores da marca PRETO na loja 75 durante todo o mês de outubro de 2026"],
     )
+
+    @field_validator("texto")
+    @classmethod
+    def validar_texto_nao_vazio(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("O texto do comando não pode ser vazio ou conter apenas espaços.")
+        return value
     contexto: dict[str, Any] = Field(
         default_factory=dict,
         description=(
