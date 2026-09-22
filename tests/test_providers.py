@@ -56,6 +56,15 @@ class TestProviderFactory(unittest.TestCase):
                     with self.assertRaises(LLMAuthenticationError):
                         get_provider()
 
+    def test_provider_groq_sem_api_key_lanca_auth_error(self):
+        with patch("app.core.config.settings.llm_provider", "groq"):
+            with patch("app.core.config.settings.llm_api_key", ""):
+                fake_groq = types.ModuleType("groq")
+                fake_groq.Groq = MagicMock()
+                with patch.dict(sys.modules, {"groq": fake_groq}):
+                    with self.assertRaises(LLMAuthenticationError):
+                        get_provider()
+
 
 class TestGeminiProvider(unittest.TestCase):
     def setUp(self):
@@ -330,6 +339,107 @@ class TestAnthropicProvider(unittest.TestCase):
                 mock_res = MagicMock()
                 mock_res.content = []
                 provider._client.messages.create.return_value = mock_res
+
+                with self.assertRaises(LLMResponseParsingError):
+                    provider.complete("teste prompt", {})
+
+
+class TestGroqProvider(unittest.TestCase):
+    def setUp(self):
+        self.fake_groq = types.ModuleType("groq")
+
+        class GroqError(Exception):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args)
+
+        class AuthenticationError(GroqError): pass
+        class RateLimitError(GroqError): pass
+        class APITimeoutError(GroqError): pass
+        class APIConnectionError(GroqError): pass
+        class InternalServerError(GroqError): pass
+        class APIStatusError(GroqError): pass
+        class PermissionDeniedError(GroqError): pass
+
+        self.fake_groq.Groq = MagicMock()
+        self.fake_groq.GroqError = GroqError
+        self.fake_groq.AuthenticationError = AuthenticationError
+        self.fake_groq.RateLimitError = RateLimitError
+        self.fake_groq.APITimeoutError = APITimeoutError
+        self.fake_groq.APIConnectionError = APIConnectionError
+        self.fake_groq.InternalServerError = InternalServerError
+        self.fake_groq.APIStatusError = APIStatusError
+        self.fake_groq.PermissionDeniedError = PermissionDeniedError
+
+    def test_groq_complete_sucesso(self):
+        with patch.dict(sys.modules, {"groq": self.fake_groq}):
+            with patch("app.core.config.settings.llm_api_key", "fake-groq-key"):
+                from app.providers.groq import GroqProvider
+                provider = GroqProvider()
+
+                mock_choice = MagicMock()
+                mock_choice.message.content = '{"canal": "ECOMMERCE", "taxa": 0.05}'
+                mock_res = MagicMock()
+                mock_res.choices = [mock_choice]
+                provider._client.chat.completions.create.return_value = mock_res
+
+                result = provider.complete("teste prompt", {})
+                self.assertEqual(result, {"canal": "ECOMMERCE", "taxa": 0.05})
+
+    def test_groq_auth_error(self):
+        with patch.dict(sys.modules, {"groq": self.fake_groq}):
+            with patch("app.core.config.settings.llm_api_key", "secret-groq-key"):
+                from app.providers.groq import GroqProvider
+                provider = GroqProvider()
+                provider._client.chat.completions.create.side_effect = self.fake_groq.AuthenticationError("Invalid Auth")
+
+                with self.assertRaises(LLMAuthenticationError) as ctx:
+                    provider.complete("teste prompt", {})
+                self.assertNotIn("secret-groq-key", str(ctx.exception))
+
+    def test_groq_rate_limit_error(self):
+        with patch.dict(sys.modules, {"groq": self.fake_groq}):
+            with patch("app.core.config.settings.llm_api_key", "fake-key"):
+                from app.providers.groq import GroqProvider
+                provider = GroqProvider()
+                provider._client.chat.completions.create.side_effect = self.fake_groq.RateLimitError("Rate limit reached")
+
+                with self.assertRaises(LLMRateLimitError):
+                    provider.complete("teste prompt", {})
+
+    def test_groq_timeout_error(self):
+        with patch.dict(sys.modules, {"groq": self.fake_groq}):
+            with patch("app.core.config.settings.llm_api_key", "fake-key"):
+                from app.providers.groq import GroqProvider
+                provider = GroqProvider()
+                provider._client.chat.completions.create.side_effect = self.fake_groq.APITimeoutError(request=MagicMock())
+
+                with self.assertRaises(LLMTimeoutError):
+                    provider.complete("teste prompt", {})
+
+    def test_groq_empty_content_parsing_error(self):
+        with patch.dict(sys.modules, {"groq": self.fake_groq}):
+            with patch("app.core.config.settings.llm_api_key", "fake-key"):
+                from app.providers.groq import GroqProvider
+                provider = GroqProvider()
+                mock_choice = MagicMock()
+                mock_choice.message.content = ""
+                mock_res = MagicMock()
+                mock_res.choices = [mock_choice]
+                provider._client.chat.completions.create.return_value = mock_res
+
+                with self.assertRaises(LLMResponseParsingError):
+                    provider.complete("teste prompt", {})
+
+    def test_groq_invalid_json_parsing_error(self):
+        with patch.dict(sys.modules, {"groq": self.fake_groq}):
+            with patch("app.core.config.settings.llm_api_key", "fake-key"):
+                from app.providers.groq import GroqProvider
+                provider = GroqProvider()
+                mock_choice = MagicMock()
+                mock_choice.message.content = "not json"
+                mock_res = MagicMock()
+                mock_res.choices = [mock_choice]
+                provider._client.chat.completions.create.return_value = mock_res
 
                 with self.assertRaises(LLMResponseParsingError):
                     provider.complete("teste prompt", {})
