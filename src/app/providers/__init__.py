@@ -1,4 +1,4 @@
-﻿"""
+"""
 Factory de provedores de LLM (Strategy Pattern).
 
 Lê LLM_PROVIDER e retorna a implementação concreta correta.
@@ -23,10 +23,13 @@ def get_provider() -> LLMProvider:
         case "anthropic":
             from app.providers.anthropic import AnthropicProvider
             return AnthropicProvider()
+        case "groq":
+            from app.providers.groq import GroqProvider
+            return GroqProvider()
         case _:
             raise ValueError(
                 f"Provedor de LLM desconhecido: '{name}'. "
-                "Valores aceitos: gemini, openai, anthropic."
+                "Valores aceitos: gemini, openai, anthropic, groq."
             )
 
 
