@@ -1,6 +1,9 @@
-﻿services:
+services:
   ai:
-    build: .
+    build:
+      context: .
+      args:
+        LLM_SDK: ${LLM_SDK:-google-genai}
     container_name: bugbusters-ai
     ports:
       - "${APP_PORT:-8000}:8000"
