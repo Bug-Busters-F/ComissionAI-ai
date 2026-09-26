@@ -41,7 +41,7 @@ Não inclua senhas, tokens ou outras informações sensíveis nos arquivos versi
 ### Pré-requisitos
 
 - Python 3.12 ou superior
-- Chave de API do provedor de LLM escolhido (Gemini, OpenAI ou Anthropic)
+- Chave de API do provedor de LLM escolhido (Gemini, Groq, OpenAI ou Anthropic)
 
 ### Instalação
 
@@ -59,7 +59,8 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # 3. Instalar o SDK do provedor de LLM que você vai usar (escolha um)
-pip install google-genai          # Gemini
+pip install google-genai          # Gemini (provedor padrão)
+pip install groq                  # Groq
 pip install openai                # OpenAI
 pip install anthropic             # Anthropic
 ```
@@ -76,7 +77,8 @@ Edite o `.env` com os valores corretos:
 
 | Variável                | Descrição                                                    | Exemplo            | Padrão               |
 |-------------------------|--------------------------------------------------------------|--------------------|----------------------|
-| `LLM_PROVIDER`          | Provedor de LLM (`gemini`, `openai` ou `anthropic`)          | `gemini`           | `gemini`             |
+| `LLM_PROVIDER`          | Provedor de LLM (`gemini`, `groq`, `openai` ou `anthropic`)  | `gemini`           | `gemini`             |
+| `LLM_SDK`               | Pacote SDK para instalação no build Docker                   | `google-genai`     | `google-genai`       |
 | `LLM_API_KEY`           | Chave de API do provedor configurado                         | `AIza...`          | `""` (obrigatória)   |
 | `LLM_MODEL`             | Modelo específico (vazio usa o padrão do provedor)           | `gemini-3.6-flash` | `gemini-3.6-flash`   |
 | `LLM_TEMPERATURE`       | Temperatura de inferência (0.0 para determinismo estruturado)| `0.0`              | `0.0`                |
@@ -171,9 +173,19 @@ docker compose down
 # Acessar o shell do container
 docker compose exec ai bash
 
-# Rebuildar a imagem após mudar requirements.txt
+# Rebuildar a imagem após mudar requirements.txt ou trocar de SDK
 docker compose up --build
+
+# Para buildar com outro provedor (ex: Groq)
+docker compose build --build-arg LLM_SDK=groq
 ```
+
+### Documentação de Integração e Contratos
+
+Para apoiar a equipe na integração do ambiente unificado (**S1-B13**) e na elaboração do manual de entrega (**S1-B14**):
+
+- **[Guia de Execução, Empacotamento e Integração](./docs/GUIA-EXECUCAO-E-INTEGRACAO.md)**: Guia completo para os desenvolvedores e DevOps, com topologia de rede Docker, configuração recomendada no Spring Boot (`application.yml`), mapeamento de códigos de erro (`401`, `429`, `502`, `504`), scripts de diagnóstico de conectividade do LLM e limitações aprovadas para o MVP.
+- **[Contrato da Rota de Interpretação](./docs/CONTRATO-INTERPRETAR.md)**: Especificação formal da rota `POST /api/v1/interpretar`, detalhando cada campo de entrada/saída, catálogo de dimensões e comportamento com pendências.
 
 ## Enviando uma Contribuição
 
