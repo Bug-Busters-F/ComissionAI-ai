@@ -26,6 +26,7 @@ def calcular_confianca(
     cod_marca: int | None = None,
     cod_cargo: int | None = None,
     cod_loja: int | None = None,
+    tem_escopo_extra: bool = False,
 ) -> Decimal:
     """
     Calcula deterministicamente o score de confiança técnica da interpretação.
@@ -51,7 +52,7 @@ def calcular_confianca(
         score += Decimal("0.40")
 
     # Escopo: atendido por canal OU por qualquer dimensão de público (marca, cargo, loja)
-    if canal is not None or cod_marca is not None or cod_cargo is not None or cod_loja is not None:
+    if tem_escopo_extra or canal is not None or cod_marca is not None or cod_cargo is not None or cod_loja is not None:
         score += Decimal("0.35")
 
     if data_inicio is not None:

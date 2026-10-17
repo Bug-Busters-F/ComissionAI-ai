@@ -10,6 +10,9 @@ services:
     env_file:
       - .env
     restart: unless-stopped
+    # Para o agente alcançar o Spring rodando no host (BACKEND_BASE_URL=http://host.docker.internal:8080)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
     # --- Desenvolvimento: hot reload com volume ---
     # Descomente abaixo para habilitar recarga automática ao editar src/

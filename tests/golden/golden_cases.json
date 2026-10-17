@@ -1,0 +1,1244 @@
+{
+  "_formato": {
+    "descricao": "Casos de ouro compartilhados entre o backend (Spring, CalculoService) e o serviço de IA (templates/sandbox Python). Mesma regra de negócio, mesmos números esperados.",
+    "arredondamento": "Cada parcela monetária é arredondada separadamente em escala 2 com HALF_UP; comissaoTotal = comissaoBase + bonusPercentual + bonusFixo. Taxa tem escala 4.",
+    "precedencia": "Entre regras aplicáveis vale a maior especificidade (matrícula 16, loja 8, cargo 4, canal != PADRAO 2, marca 1). Empate: a regra com faixa de valor prevalece sobre a sem faixa; persistindo empate, o cálculo é IMPEDIDO por conflito. Sem regra aplicável usa-se baseComiss.",
+    "aplicabilidade": "Uma regra se aplica quando: vigência cobre dataVenda (inclusivo nas duas pontas); cada dimensão preenchida na regra (codMarca, codLoja, codCargo, matricula, canal) é igual à da venda; o valor da venda está na faixa [valorMin, valorMax] respeitando minInclusivo/maxInclusivo (faixa ausente = qualquer valor). canal da venda nulo equivale a PADRAO.",
+    "campos_caso": "regras[] (ref é um rótulo; null = dimensão não restringe), baseComiss (taxa da base da competência, null = sem base), venda, esperado. esperado.status = SUCESSO (com taxa, origemTaxa REGRA_NEGOCIO|BASE_COMISS, regraAplicada = ref da regra ou 'BASE', comissaoBase, bonusPercentual, bonusFixo, comissaoTotal) ou IMPEDIDO (com motivoContem = trecho do motivo).",
+    "valores": "Valores monetários e taxas são strings decimais para preservar a precisão."
+  },
+  "casos": [
+    {
+      "id": "regra-simples-marca",
+      "descricao": "Regra por marca substitui a base: 1000.00 x 3% = 30.00",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0300",
+          "valorMin": null,
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0200",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0300",
+        "origemTaxa": "REGRA_NEGOCIO",
+        "regraAplicada": "R1",
+        "comissaoBase": "30.00",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "30.00"
+      }
+    },
+    {
+      "id": "base-fallback",
+      "descricao": "Sem regra aplicável usa a base: 1000.00 x 2% = 20.00",
+      "regras": [],
+      "baseComiss": "0.0200",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0200",
+        "origemTaxa": "BASE_COMISS",
+        "regraAplicada": "BASE",
+        "comissaoBase": "20.00",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "20.00"
+      }
+    },
+    {
+      "id": "arredondamento-half-up-meio",
+      "descricao": "10.10 x 5% = 0.505 arredonda para 0.51 (HALF_UP, não bancário)",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0500",
+          "valorMin": null,
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0200",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "10.10",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0500",
+        "origemTaxa": "REGRA_NEGOCIO",
+        "regraAplicada": "R1",
+        "comissaoBase": "0.51",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "0.51"
+      }
+    },
+    {
+      "id": "arredondamento-half-up-baixo",
+      "descricao": "20.10 x 2.5% = 0.5025 arredonda para 0.50",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0250",
+          "valorMin": null,
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0200",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "20.10",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0250",
+        "origemTaxa": "REGRA_NEGOCIO",
+        "regraAplicada": "R1",
+        "comissaoBase": "0.50",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "0.50"
+      }
+    },
+    {
+      "id": "faixa-max-inclusivo-no-limite",
+      "descricao": "Faixa [0,1000] com máximo inclusivo: venda 1000.00 entra",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0300",
+          "valorMin": "0.00",
+          "valorMax": "1000.00",
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0200",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0300",
+        "origemTaxa": "REGRA_NEGOCIO",
+        "regraAplicada": "R1",
+        "comissaoBase": "30.00",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "30.00"
+      }
+    },
+    {
+      "id": "faixa-max-exclusivo-no-limite",
+      "descricao": "Faixa [0,1000) com máximo exclusivo: venda 1000.00 NÃO entra, cai na base",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0300",
+          "valorMin": "0.00",
+          "valorMax": "1000.00",
+          "minInclusivo": true,
+          "maxInclusivo": false,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0200",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0200",
+        "origemTaxa": "BASE_COMISS",
+        "regraAplicada": "BASE",
+        "comissaoBase": "20.00",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "20.00"
+      }
+    },
+    {
+      "id": "faixa-max-exclusivo-logo-abaixo",
+      "descricao": "Faixa [0,1000): venda 999.99 entra; 999.99 x 3% = 29.9997 -> 30.00",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0300",
+          "valorMin": "0.00",
+          "valorMax": "1000.00",
+          "minInclusivo": true,
+          "maxInclusivo": false,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0200",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "999.99",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0300",
+        "origemTaxa": "REGRA_NEGOCIO",
+        "regraAplicada": "R1",
+        "comissaoBase": "30.00",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "30.00"
+      }
+    },
+    {
+      "id": "faixa-min-inclusivo-no-limite",
+      "descricao": "Faixa [1000,+inf) com mínimo inclusivo: venda 1000.00 entra",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0400",
+          "valorMin": "1000.00",
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0200",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0400",
+        "origemTaxa": "REGRA_NEGOCIO",
+        "regraAplicada": "R1",
+        "comissaoBase": "40.00",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "40.00"
+      }
+    },
+    {
+      "id": "faixa-min-exclusivo-no-limite",
+      "descricao": "Faixa (1000,+inf) com mínimo exclusivo: venda 1000.00 NÃO entra, cai na base",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0400",
+          "valorMin": "1000.00",
+          "valorMax": null,
+          "minInclusivo": false,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0200",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0200",
+        "origemTaxa": "BASE_COMISS",
+        "regraAplicada": "BASE",
+        "comissaoBase": "20.00",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "20.00"
+      }
+    },
+    {
+      "id": "faixas-contiguas-limite-vai-para-a-superior",
+      "descricao": "Faixas contíguas [0,1000) 2% e [1000,+inf) 3%: 1000.00 usa a de 3%",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0200",
+          "valorMin": null,
+          "valorMax": "1000.00",
+          "minInclusivo": true,
+          "maxInclusivo": false,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        },
+        {
+          "ref": "R2",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0300",
+          "valorMin": "1000.00",
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0100",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0300",
+        "origemTaxa": "REGRA_NEGOCIO",
+        "regraAplicada": "R2",
+        "comissaoBase": "30.00",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "30.00"
+      }
+    },
+    {
+      "id": "faixas-contiguas-logo-abaixo",
+      "descricao": "Mesmas faixas: 999.99 usa a de 2%; 999.99 x 2% = 19.9998 -> 20.00",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0200",
+          "valorMin": null,
+          "valorMax": "1000.00",
+          "minInclusivo": true,
+          "maxInclusivo": false,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        },
+        {
+          "ref": "R2",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0300",
+          "valorMin": "1000.00",
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0100",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "999.99",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0200",
+        "origemTaxa": "REGRA_NEGOCIO",
+        "regraAplicada": "R1",
+        "comissaoBase": "20.00",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "20.00"
+      }
+    },
+    {
+      "id": "bonus-percentual",
+      "descricao": "3% + bônus de 1% sobre a venda: 30.00 + 10.00 = 40.00",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0300",
+          "valorMin": null,
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": "0.0100",
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0200",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0300",
+        "origemTaxa": "REGRA_NEGOCIO",
+        "regraAplicada": "R1",
+        "comissaoBase": "30.00",
+        "bonusPercentual": "10.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "40.00"
+      }
+    },
+    {
+      "id": "bonus-valor-fixo",
+      "descricao": "3% + bônus fixo de R$ 50,00 por venda: 30.00 + 50.00 = 80.00",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0300",
+          "valorMin": null,
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": "50.00",
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0200",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0300",
+        "origemTaxa": "REGRA_NEGOCIO",
+        "regraAplicada": "R1",
+        "comissaoBase": "30.00",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "50.00",
+        "comissaoTotal": "80.00"
+      }
+    },
+    {
+      "id": "bonus-percentual-e-fixo",
+      "descricao": "3% + 1% + R$ 25,00: 30.00 + 10.00 + 25.00 = 65.00",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0300",
+          "valorMin": null,
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": "0.0100",
+          "bonusValorFixo": "25.00",
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0200",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0300",
+        "origemTaxa": "REGRA_NEGOCIO",
+        "regraAplicada": "R1",
+        "comissaoBase": "30.00",
+        "bonusPercentual": "10.00",
+        "bonusFixo": "25.00",
+        "comissaoTotal": "65.00"
+      }
+    },
+    {
+      "id": "bonus-arredonda-cada-parcela",
+      "descricao": "10.10 x 5% = 0.505 -> 0.51 e 10.10 x 5% de bônus -> 0.51; total = soma das parcelas arredondadas = 1.02 (não 1.01)",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0500",
+          "valorMin": null,
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": "0.0500",
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0200",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "10.10",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0500",
+        "origemTaxa": "REGRA_NEGOCIO",
+        "regraAplicada": "R1",
+        "comissaoBase": "0.51",
+        "bonusPercentual": "0.51",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "1.02"
+      }
+    },
+    {
+      "id": "bonus-nao-vale-fora-da-faixa",
+      "descricao": "Regra com faixa e bônus: venda fora da faixa não recebe bônus (usa a base)",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0300",
+          "valorMin": "2000.00",
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": "50.00",
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0200",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0200",
+        "origemTaxa": "BASE_COMISS",
+        "regraAplicada": "BASE",
+        "comissaoBase": "20.00",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "20.00"
+      }
+    },
+    {
+      "id": "precedencia-loja-sobre-marca",
+      "descricao": "Loja (peso 8) vence marca (peso 1): 1000.00 x 5% = 50.00",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0200",
+          "valorMin": null,
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        },
+        {
+          "ref": "R2",
+          "codMarca": null,
+          "codLoja": 75,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0500",
+          "valorMin": null,
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0100",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0500",
+        "origemTaxa": "REGRA_NEGOCIO",
+        "regraAplicada": "R2",
+        "comissaoBase": "50.00",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "50.00"
+      }
+    },
+    {
+      "id": "precedencia-matricula-sobre-loja-e-cargo",
+      "descricao": "Matrícula (16) vence loja+... : 1000.00 x 6% = 60.00",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": null,
+          "codLoja": 75,
+          "codCargo": 100,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0500",
+          "valorMin": null,
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        },
+        {
+          "ref": "R2",
+          "codMarca": null,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": "GOLD-001",
+          "canal": null,
+          "taxa": "0.0600",
+          "valorMin": null,
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0100",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0600",
+        "origemTaxa": "REGRA_NEGOCIO",
+        "regraAplicada": "R2",
+        "comissaoBase": "60.00",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "60.00"
+      }
+    },
+    {
+      "id": "empate-bloqueia-calculo",
+      "descricao": "Duas regras com a mesma especificidade (loja 75) e taxas diferentes: cálculo IMPEDIDO por conflito",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": null,
+          "codLoja": 75,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0300",
+          "valorMin": null,
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        },
+        {
+          "ref": "R2",
+          "codMarca": null,
+          "codLoja": 75,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0400",
+          "valorMin": null,
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0100",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "IMPEDIDO",
+        "motivoContem": "Conflito de regras"
+      }
+    },
+    {
+      "id": "desempate-por-faixa",
+      "descricao": "Mesma especificidade (loja 75): a regra com faixa que contém o valor prevalece sobre a sem faixa",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": null,
+          "codLoja": 75,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0300",
+          "valorMin": null,
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        },
+        {
+          "ref": "R2",
+          "codMarca": null,
+          "codLoja": 75,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0400",
+          "valorMin": "500.00",
+          "valorMax": "2000.00",
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0100",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0400",
+        "origemTaxa": "REGRA_NEGOCIO",
+        "regraAplicada": "R2",
+        "comissaoBase": "40.00",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "40.00"
+      }
+    },
+    {
+      "id": "faixa-nao-contem-valor-evita-conflito",
+      "descricao": "Mesma especificidade, mas só uma contém o valor: sem conflito, vale a que contém",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": null,
+          "codLoja": 75,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0300",
+          "valorMin": null,
+          "valorMax": "500.00",
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        },
+        {
+          "ref": "R2",
+          "codMarca": null,
+          "codLoja": 75,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0400",
+          "valorMin": "500.01",
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0100",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0400",
+        "origemTaxa": "REGRA_NEGOCIO",
+        "regraAplicada": "R2",
+        "comissaoBase": "40.00",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "40.00"
+      }
+    },
+    {
+      "id": "fora-da-vigencia",
+      "descricao": "Regra vigente em novembro não vale para venda de 15/10: usa a base",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0300",
+          "valorMin": null,
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-11-01",
+          "dataFim": "2026-11-30"
+        }
+      ],
+      "baseComiss": "0.0200",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0200",
+        "origemTaxa": "BASE_COMISS",
+        "regraAplicada": "BASE",
+        "comissaoBase": "20.00",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "20.00"
+      }
+    },
+    {
+      "id": "vigencia-limites-inclusivos",
+      "descricao": "Vigência 15/10 a 15/10 inclui a própria data da venda",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0300",
+          "valorMin": null,
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-15",
+          "dataFim": "2026-10-15"
+        }
+      ],
+      "baseComiss": "0.0200",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0300",
+        "origemTaxa": "REGRA_NEGOCIO",
+        "regraAplicada": "R1",
+        "comissaoBase": "30.00",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "30.00"
+      }
+    },
+    {
+      "id": "canal-especifico-nao-casa",
+      "descricao": "Regra do canal ECOMMERCE não vale para venda LOJA_FISICA: usa a base",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": "ECOMMERCE",
+          "taxa": "0.0300",
+          "valorMin": null,
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0200",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": "LOJA_FISICA",
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0200",
+        "origemTaxa": "BASE_COMISS",
+        "regraAplicada": "BASE",
+        "comissaoBase": "20.00",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "20.00"
+      }
+    },
+    {
+      "id": "canal-especifico-casa",
+      "descricao": "Regra do canal ECOMMERCE vale para venda ECOMMERCE",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": 10,
+          "codLoja": null,
+          "codCargo": null,
+          "matricula": null,
+          "canal": "ECOMMERCE",
+          "taxa": "0.0300",
+          "valorMin": null,
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0200",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": "ECOMMERCE",
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0300",
+        "origemTaxa": "REGRA_NEGOCIO",
+        "regraAplicada": "R1",
+        "comissaoBase": "30.00",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "30.00"
+      }
+    },
+    {
+      "id": "cargo-diferente-nao-casa",
+      "descricao": "Regra do cargo 150 não vale para venda de cargo 100: usa a base",
+      "regras": [
+        {
+          "ref": "R1",
+          "codMarca": null,
+          "codLoja": null,
+          "codCargo": 150,
+          "matricula": null,
+          "canal": null,
+          "taxa": "0.0300",
+          "valorMin": null,
+          "valorMax": null,
+          "minInclusivo": true,
+          "maxInclusivo": true,
+          "bonusPercentual": null,
+          "bonusValorFixo": null,
+          "dataInicio": "2026-10-01",
+          "dataFim": "2026-10-31"
+        }
+      ],
+      "baseComiss": "0.0200",
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "SUCESSO",
+        "taxa": "0.0200",
+        "origemTaxa": "BASE_COMISS",
+        "regraAplicada": "BASE",
+        "comissaoBase": "20.00",
+        "bonusPercentual": "0.00",
+        "bonusFixo": "0.00",
+        "comissaoTotal": "20.00"
+      }
+    },
+    {
+      "id": "sem-regra-nem-base",
+      "descricao": "Sem regra aplicável e sem base cadastrada: cálculo IMPEDIDO",
+      "regras": [],
+      "baseComiss": null,
+      "venda": {
+        "codMarca": 10,
+        "codLoja": 75,
+        "codCargo": 100,
+        "matricula": "GOLD-001",
+        "canal": null,
+        "valor": "1000.00",
+        "dataVenda": "2026-10-15"
+      },
+      "esperado": {
+        "status": "IMPEDIDO",
+        "motivoContem": "Taxa de comissão não encontrada"
+      }
+    }
+  ]
+}

@@ -16,6 +16,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from app.api.routes.health import router as health_router
 from app.api.routes.interpretador import router as interpretador_router
+from app.api.routes.v2 import router as v2_router
 from app.core.config import settings
 from app.core.exceptions import LLMBaseException
 
@@ -76,6 +77,7 @@ async def unhandled_exception_handler(request, exc: Exception):
 # --- Routers ---
 app.include_router(health_router)
 app.include_router(interpretador_router)
+app.include_router(v2_router)
 
 
 if __name__ == "__main__":
