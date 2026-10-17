@@ -88,6 +88,18 @@ Edite o `.env` com os valores corretos:
 | `APP_PORT`              | Porta em que o serviço sobe                                  | `8000`             | `8000`               |
 | `APP_RELOAD`            | Hot reload para desenvolvimento local                        | `true`             | `false`              |
 
+Variáveis da Sprint 2 (agente, ferramentas e simulação; todas opcionais, com padrão):
+
+| Variável | Descrição | Padrão |
+|---|---|---|
+| `BACKEND_BASE_URL` | URL do Spring consultado pelas ferramentas (`/api/v1/consultas-ia`). No Docker use `http://host.docker.internal:8080` | `http://localhost:8080` |
+| `TOOL_TIMEOUT_SECONDS` | Timeout por chamada ao backend | `5` |
+| `AGENT_MAX_STEPS` / `AGENT_MAX_TOOL_CALLS` / `AGENT_MAX_DURATION_SECONDS` | Limites do laço do agente por requisição | `6` / `8` / `45` |
+| `AGENT_MAX_CODE_EXECUTIONS` | Execuções de código por simulação | `5` |
+| `SIM_MAX_SECONDS` / `SIM_MAX_MEMORY_MB` / `SIM_MAX_OUTPUT_KB` | Limites do sandbox | `10` / `256` / `512` |
+| `SIM_MAX_REGISTROS` / `SIM_MAX_CENARIOS` | Máx. de vendas e cenários por simulação | `50000` / `5` |
+| `SIM_MAX_CODE_LINES` / `SIM_MAX_CODE_BYTES` | Tamanho máximo do código gerado | `150` / `8192` |
+
 > **Nunca versione o arquivo `.env`.** Ele já está no `.gitignore`.
 
 ### Executando os Testes
@@ -102,6 +114,9 @@ python -m unittest discover -s tests
 python -m unittest -v tests/test_schemas_regra.py
 python -m unittest -v tests/test_providers.py
 python -m unittest -v tests/test_exceptions.py
+python -m unittest -v tests/test_agente.py tests/test_tools.py tests/test_simulacao.py
+python -m unittest -v tests/test_sandbox_seguranca.py   # corpus de ataque do sandbox
+python -m unittest -v tests/test_golden.py               # casos de ouro compartilhados com o Spring
 python -m unittest -v tests/test_api_exceptions.py
 ```
 
@@ -180,11 +195,22 @@ docker compose up --build
 docker compose build --build-arg LLM_SDK=groq
 ```
 
+### Casos de ouro (equivalência com o Spring)
+
+`tests/golden/golden_cases.json` é **o mesmo arquivo** de `backend/src/test/resources/golden/golden_cases.json` no repo do Spring. Se a regra de cálculo mudar em um lado, atualize o arquivo nos dois repos e rode os dois testes (`GoldenCasesTest` no Spring, `tests/test_golden.py` aqui).
+
+### Demonstração do agente
+
+```bash
+PYTHONPATH=src python scripts/demo_agente.py   # LLM e backend simulados
+```
+
 ### Documentação de Integração e Contratos
 
 Para apoiar a equipe na integração do ambiente unificado (**S1-B13**) e na elaboração do manual de entrega (**S1-B14**):
 
 - **[Guia de Execução, Empacotamento e Integração](./docs/GUIA-EXECUCAO-E-INTEGRACAO.md)**: Guia completo para os desenvolvedores e DevOps, com topologia de rede Docker, configuração recomendada no Spring Boot (`application.yml`), mapeamento de códigos de erro (`401`, `429`, `502`, `504`), scripts de diagnóstico de conectividade do LLM e limitações aprovadas para o MVP.
+- **[Contrato v2 (agente, propostas e simulação)](./docs/CONTRATO-INTERPRETAR-V2.md)** e **[exemplos de interpretação](./docs/EXEMPLOS-INTERPRETACAO-V2.md)**.
 - **[Contrato da Rota de Interpretação](./docs/CONTRATO-INTERPRETAR.md)**: Especificação formal da rota `POST /api/v1/interpretar`, detalhando cada campo de entrada/saída, catálogo de dimensões e comportamento com pendências.
 
 ## Enviando uma Contribuição

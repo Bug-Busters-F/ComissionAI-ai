@@ -1,0 +1,121 @@
+# Contrato v2 — interpretação, agente e simulação
+
+Documento para o time do Spring. Fonte da verdade: `src/app/schemas/proposta.py` e o Swagger do serviço
+(`/docs`). O v1 (`POST /api/v1/interpretar`) continua funcionando e convive com o v2 nesta sprint.
+
+## O que a IA faz e não faz
+- **Propõe**; a aprovação é do usuário. Nunca devolve `status`/ativação de regra, versão publicada, `id` persistido
+  nem identificadores financeiros (valor de comissão, protocolo de cálculo).
+- **Não acessa o banco.** O que precisa saber, consulta no Spring (`/api/v1/consultas-ia/...`, `BACKEND_BASE_URL`).
+- Quando não há evidência, devolve **pendência objetiva** (nunca valor inventado).
+
+## Rotas
+
+| Rota | Função | Situação |
+|---|---|---|
+| `POST /api/v2/interpretar` | Pedido em linguagem natural → lista de propostas (agente com ferramentas) | Implementada (IA-1/2/3/4) |
+| `POST /api/v2/simular` | Propostas → simulação em sandbox (template ou código livre) | Implementada (requisito do cliente) |
+| `POST /api/v2/reinterpretar` | Texto alterado de uma regra → proposta(s) de substituição | **Stub 501** (IA-6, Humberto) |
+| `POST /api/v2/atualizar-artefatos` | Campos editados → explicação/código atualizados | **Stub 501** (IA-6/IA-7, Humberto) |
+
+Erros: mesmo formato do v1 (`{"detail", "error_code"}`): `401 LLM_AUTH_ERROR`, `429 LLM_RATE_LIMIT_ERROR`,
+`502 LLM_PROVIDER_ERROR`, `504 LLM_TIMEOUT_ERROR`, `422` (validação), `501 NAO_IMPLEMENTADO` (stubs).
+
+## `POST /api/v2/interpretar`
+
+```json
+{
+  "texto": "3% para vendedores da loja 75 e 2% para gerentes em dezembro",
+  "contexto": {"campanhaId": "12", "revisao": 3, "origem": "NOVA", "substituiVersao": null},
+  "vigenciaCampanha": {"inicio": "2026-12-01", "fim": "2026-12-31"},
+  "dataReferencia": "2026-09-07",
+  "competencia": "2026-12",
+  "catalogo": {"marcas": {"10": "PRETO"}, "cargos": {"100": "VENDEDOR LOJA"}, "canais": ["ECOMMERCE"], "lojas": {"75": "Loja 75"}}
+}
+```
+
+- `contexto`: ids **opacos**, devolvidos em eco. `campanhaId`/`substituiVersao` precisam ser **numéricos** se forem usados
+  na consulta de concorrência (o Spring valida). Em `origem="VERSAO_EXISTENTE"` a versão anterior é ignorada na
+  consulta de regras concorrentes.
+- `vigenciaCampanha`: vigência comum. **Todas as regras a herdam**; período diferente citado no texto gera
+  `VIGENCIA_INCOMPATIVEL` e a vigência da campanha é mantida.
+- `catalogo`: opcional. Sem ele (ou para o que ele não cobre) o agente resolve nomes por ferramenta.
+- `competencia` (`YYYY-MM`): usada nas consultas de base; se ausente, vem do `dataInicio` de cada proposta.
+
+Resposta:
+
+```json
+{
+  "contexto": {"campanhaId": "12", "revisao": 3, "origem": "NOVA", "substituiVersao": null},
+  "status": "PROPOSTA_COM_PENDENCIAS",
+  "propostas": [{
+    "idLocal": "p1",
+    "condicoes": {"codCargo": 100, "descriCargo": "VENDEDOR LOJA", "codLoja": 75, "matricula": null, "faixaValor": null},
+    "operacao": {"tipo": "TAXA_ABSOLUTA", "valor": "0.0300"},
+    "taxa": "0.0300",
+    "bonus": null,
+    "dataInicio": "2026-12-01", "dataFim": "2026-12-31",
+    "origem": {"trecho": "3% para vendedores da loja 75", "inicio": 0, "fim": 29},
+    "referencias": [], "evidencias": [],
+    "explicacao": null, "codigoPython": null,
+    "confianca": "1.00",
+    "pendencias": []
+  }],
+  "pendenciasGerais": [],
+  "trechosNaoMapeados": [],
+  "trilhaFerramentas": []
+}
+```
+
+| Campo | Observação |
+|---|---|
+| `propostas[]` | Uma por regra. `idLocal` (`p1`, `p2`…) só correlaciona dentro da resposta; **não é id de negócio**. |
+| `condicoes.faixaValor` | `{min, max, minInclusivo, maxInclusivo}` sobre o valor **de cada venda**. Padrão `[min, max)`. |
+| `condicoes.matricula` | String (ex.: `MATRIC-56`). |
+| `operacao` / `taxa` | Só `TAXA_ABSOLUTA` é preenchida pelo IA-2. Ajustes sobre a base (pp/relativo) são do IA-5 e voltam com `taxa=null` + pendência. |
+| `bonus` | `{percentual, valorFixo}`: adicional **sobre a venda** (valor fixo **por venda**). |
+| `origem` | Trecho **literal** do pedido (validado contra o texto). |
+| `referencias` | De onde veio cada dado consultado (cadastro, base, regra). |
+| `evidencias` / `trilhaFerramentas` | Ferramentas usadas, argumentos, status (`OK`/`SEM_DADOS`/`AMBIGUO`/`FALHA`), resumo e duração. |
+| `explicacao` / `codigoPython` | `null` até o IA-7 (Humberto). |
+| `confianca` | Determinística (não é o LLM). Não persistir. |
+| `trechosNaoMapeados` | Partes do pedido que não viraram regra. Nada é descartado em silêncio. |
+| `status` | `PROPOSTA_COMPLETA`, `PROPOSTA_COM_PENDENCIAS` ou `SEM_PROPOSTA`. |
+
+### Catálogo de pendências
+`CAMPO_AUSENTE`, `AMBIGUIDADE_CARGO`, `AMBIGUIDADE_PUBLICO`, `CADASTRO_INEXISTENTE`, `MATRICULA_INVALIDA`,
+`CRITERIO_NAO_SUPORTADO`, `TRECHO_INCOMPLETO`, `VIGENCIA_INCOMPATIVEL`, `BASE_AUSENTE`, `CONFLITO_REGRA`,
+`TOOL_FALHA`, `LIMITE_AGENTE_ATINGIDO`, `TAXA_INVALIDA`, `SIMULACAO_NAO_VALIDADA`, `NAO_SUPORTADO_NA_APURACAO`.
+Cada pendência: `{codigo, mensagem, campo, pergunta}`. Códigos são estáveis: tratem pelo `codigo`, não pelo texto.
+
+### Limites do agente (por requisição)
+`AGENT_MAX_STEPS=6`, `AGENT_MAX_TOOL_CALLS=8`, `AGENT_MAX_DURATION_SECONDS=45`. Ao atingir um limite, o que já foi
+apurado é devolvido com `LIMITE_AGENTE_ATINGIDO`. **Timeout em cascata:** o `AI_READ_TIMEOUT` do Spring deve ficar
+acima de 45s (já em 60s). Falha do LLM *depois* de haver propostas devolve o apurado com `TOOL_FALHA`; erro de
+autenticação (401) continua propagando.
+
+## `POST /api/v2/simular`
+```json
+{
+  "propostas": [ /* BlocoProposta do interpretar, com taxa e/ou bonus */ ],
+  "competencia": "2026-12",
+  "pedido": "e se as vendas crescerem 20%?",
+  "cenarios": [],
+  "filtro": {"loja": 75}
+}
+```
+- Sem `cenarios` e sem `pedido`: usa 80%, 100% e 120% das vendas. Com `pedido`, o agente monta os cenários.
+- **Sempre simulação**: `simulacao="SIMULACAO_SANDBOX"` e um `aviso`; nunca substitui a apuração.
+- `origem="TEMPLATE"` (casos genéricos: público, taxa, faixa, bônus, cenários) ou `"CODIGO_LIVRE"` (cálculo extra
+  pedido, ex.: ranking). Código livre devolve `codigoExecutado` e as premissas em `observacoes`.
+- **Sem validação, sem números:** se o sandbox bloquear/falhar ou o resultado não passar nas checagens, `resultados`
+  vem vazio com `SIMULACAO_NAO_VALIDADA` (ou `TOOL_FALHA`).
+- Regras de cálculo espelham a apuração: uma regra por venda (maior especificidade; faixa desempata; empate = venda em
+  conflito, não calculada), `comissão = valor×taxa + valor×bônus% + bônus fixo`, cada parcela `HALF_UP` escala 2.
+  Garantido pelos **casos de ouro** compartilhados (`tests/golden/golden_cases.json`).
+- Vendas sem proposta aplicável ficam fora (a base de comissão não entra na simulação de propostas).
+
+## Consultas ao backend (usadas pelas tools)
+`GET /api/v1/consultas-ia/{marcas|lojas|cargos}`, `/matriculas/{m}`, `/bases`, `POST /regras-concorrentes`,
+`GET /dados-simulacao`. Formato de resposta fixado com o backend (`encontrado` + `itens` etc.). Distinção usada pela IA:
+`encontrado=false`/lista vazia = **SEM_DADOS**; timeout, 5xx e JSON inválido = **FALHA** (1 retry só para falha transitória).
