@@ -491,5 +491,32 @@ class TestGroqProvider(unittest.TestCase):
                 transport.assert_not_called()
 
 
+class TestSchemaEstritoGroq(unittest.TestCase):
+    def test_modelos_aninhados_em_defs_ficam_estritos(self):
+        from app.providers.groq import _preparar_schema_estrito
+        from app.schemas.raw import InterpretacaoCampanhaRawLLM
+
+        schema = _preparar_schema_estrito(InterpretacaoCampanhaRawLLM.model_json_schema())
+
+        self.assertIn("RegraRawLLM", schema["$defs"])
+        objetos = []
+
+        def coletar(no):
+            if isinstance(no, dict):
+                if "properties" in no:
+                    objetos.append(no)
+                for valor in no.values():
+                    coletar(valor)
+            elif isinstance(no, list):
+                for item in no:
+                    coletar(item)
+
+        coletar(schema)
+        self.assertGreater(len(objetos), 1)
+        for objeto in objetos:
+            self.assertIs(objeto["additionalProperties"], False)
+            self.assertEqual(set(objeto["required"]), set(objeto["properties"]))
+
+
 if __name__ == "__main__":
     unittest.main()
