@@ -39,6 +39,8 @@ class ConsultarBaseComissao(Tool):
             return ToolResult.falha("RESPOSTA_INVALIDA", "campo 'encontrado' ausente")
         if not corpo["encontrado"]:
             return ToolResult.sem_dados()
+        if corpo.get("multiplasBases") or (isinstance(corpo.get("itens"), list) and len(corpo.get("itens")) > 1):
+            return ToolResult(status="AMBIGUO", dados=corpo)
         try:
             taxa = Decimal(str(corpo["taxa"]))
         except (KeyError, InvalidOperation):

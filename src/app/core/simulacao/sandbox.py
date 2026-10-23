@@ -8,6 +8,7 @@ Interface estável (`Sandbox.executar`) para trocar por container sem retrabalho
 
 import json
 import logging
+import os
 import subprocess
 import sys
 import tempfile
@@ -64,6 +65,10 @@ class Sandbox:
             },
             default=str,
         )
+        env: dict[str, str] = {}
+        if sys.platform == "win32" and "SYSTEMROOT" in os.environ:
+            # Windows (só desenvolvimento): o interpretador não inicia sem SYSTEMROOT; nada mais é herdado
+            env = {"SYSTEMROOT": os.environ["SYSTEMROOT"]}
         with tempfile.TemporaryDirectory(prefix="sim_") as tmp:
             try:
                 proc = subprocess.run(
@@ -72,7 +77,7 @@ class Sandbox:
                     capture_output=True,
                     timeout=settings.sim_max_seconds,
                     cwd=tmp,
-                    env={},
+                    env=env,
                     close_fds=True,
                 )
             except subprocess.TimeoutExpired:

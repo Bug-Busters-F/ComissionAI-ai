@@ -11,7 +11,10 @@ Este arquivo só usa a biblioteca padrão e não importa nada do pacote `app`.
 
 import json
 import os
-import resource
+try:
+    import resource
+except ImportError:  # Windows (só desenvolvimento): sem rlimit; produção roda em Linux (Docker) com limites
+    resource = None
 import sys
 
 ALLOWED = ("decimal", "datetime", "math", "statistics", "collections", "itertools", "functools",
@@ -82,12 +85,13 @@ def _numerico(obj, campos):
 def main():
     carga = json.loads(sys.stdin.read())
     cfg = carga["limites"]
-    mem = int(cfg["memoria_mb"]) * 1024 * 1024
-    cpu = int(cfg["cpu_s"])
-    resource.setrlimit(resource.RLIMIT_AS, (mem, mem))
-    resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu + 1))
-    resource.setrlimit(resource.RLIMIT_FSIZE, (0, 0))
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    if resource is not None:
+        mem = int(cfg["memoria_mb"]) * 1024 * 1024
+        cpu = int(cfg["cpu_s"])
+        resource.setrlimit(resource.RLIMIT_AS, (mem, mem))
+        resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu + 1))
+        resource.setrlimit(resource.RLIMIT_FSIZE, (0, 0))
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
     campos = {"valorVenda", "taxa", "min", "max", "percentual", "valorFixo", "multiplicadorVendas"}
     vendas = _numerico(carga["vendas"], campos)

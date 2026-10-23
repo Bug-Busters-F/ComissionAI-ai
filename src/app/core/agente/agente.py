@@ -247,6 +247,15 @@ class AgenteInterpretador:
                         "Informe a taxa final desejada ou cadastre a base da competência.",
                     )
                 )
+            elif r.status == "AMBIGUO":
+                bl.pendencias.append(
+                    pendencia(
+                        CodigoPendencia.AMBIGUIDADE_PUBLICO,
+                        "O público abrange múltiplas bases de comissão; nenhuma foi escolhida.",
+                        "taxa",
+                        "Restrinja o público, divida a regra por base ou informe a taxa final desejada.",
+                    )
+                )
             elif r.status == "FALHA":
                 bl.pendencias.append(_pend_falha("a base de comissão", r))
         elif lacuna.tipo == "CONCORRENCIA":

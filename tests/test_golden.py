@@ -14,8 +14,10 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
+from app.core.prompts.codigo_regra_prompt import gerar_codigo_regra
 from app.core.simulacao.sandbox import Sandbox
 from app.core.simulacao.templates import TEMPLATE_CODIGO
+from app.schemas.proposta import BlocoProposta, Bonus, Condicoes, FaixaValor
 
 GOLDEN = json.loads((Path(__file__).parent / "golden" / "golden_cases.json").read_text(encoding="utf-8"))
 
@@ -65,6 +67,56 @@ class TestCasosDeOuro(unittest.TestCase):
                     self.assertEqual((res["vendasEmConflito"], res["totalComissao"]), (1, "0.00"), caso["descricao"])
                 else:
                     self.assertEqual(res["vendasSemRegra"], 1, caso["descricao"])
+
+
+def bloco_de(r):
+    """Regra do caso de ouro como BlocoProposta (entrada do gerador de código do IA-7)."""
+    faixa = None
+    if r.get("valorMin") is not None or r.get("valorMax") is not None:
+        faixa = FaixaValor(min=r.get("valorMin"), max=r.get("valorMax"),
+                           minInclusivo=r.get("minInclusivo", True), maxInclusivo=r.get("maxInclusivo", True))
+    bonus = None
+    if r.get("bonusPercentual") is not None or r.get("bonusValorFixo") is not None:
+        bonus = Bonus(percentual=r.get("bonusPercentual"), valorFixo=r.get("bonusValorFixo"))
+    return BlocoProposta(
+        idLocal=r["ref"], taxa=r["taxa"], bonus=bonus, dataInicio=r["dataInicio"], dataFim=r["dataFim"],
+        condicoes=Condicoes(canal=r.get("canal"), codMarca=r.get("codMarca"), codCargo=r.get("codCargo"),
+                            codLoja=r.get("codLoja"), matricula=r.get("matricula"), faixaValor=faixa),
+    )
+
+
+class TestEquivalenciaCodigoGerado(unittest.TestCase):
+    """IA-7: o Python gerado por regra produz exatamente o mesmo resultado que o template."""
+
+    CENARIOS = [{"nome": "ouro", "multiplicadorVendas": "1"}, {"nome": "120%", "multiplicadorVendas": "1.2"}]
+
+    def setUp(self):
+        self.sb = Sandbox()
+
+    def _rodar(self, codigo, vendas, regras):
+        r = self.sb.executar(codigo, vendas, regras, self.CENARIOS)
+        self.assertTrue(r.ok, r.detalhe)
+        return r.resultados
+
+    def test_codigo_da_regra_com_as_demais_equivale_ao_template(self):
+        for caso in GOLDEN["casos"]:
+            vendas = [venda_sandbox(caso["venda"])]
+            regras = [regra_sandbox(x) for x in caso["regras"]]
+            esperado = self._rodar(TEMPLATE_CODIGO, vendas, regras)
+            for i, r in enumerate(caso["regras"]):
+                with self.subTest(caso=caso["id"], regra=r["ref"]):
+                    codigo = gerar_codigo_regra(bloco_de(r))
+                    self.assertIsNotNone(codigo)
+                    self.assertEqual(self._rodar(codigo, vendas, regras[:i] + regras[i + 1:]), esperado)
+
+    def test_codigo_da_regra_sozinha_equivale_ao_template_so_com_ela(self):
+        # venda fora do público fica "sem regra" (no Spring cairia em outra regra ou na base)
+        vendas = [venda_sandbox(c["venda"]) for c in GOLDEN["casos"]]
+        for caso in GOLDEN["casos"]:
+            for r in caso["regras"]:
+                with self.subTest(caso=caso["id"], regra=r["ref"]):
+                    esperado = self._rodar(TEMPLATE_CODIGO, vendas, [regra_sandbox(r)])
+                    self.assertEqual(self._rodar(gerar_codigo_regra(bloco_de(r)), vendas, []), esperado)
 
 
 if __name__ == "__main__":

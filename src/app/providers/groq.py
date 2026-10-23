@@ -67,9 +67,10 @@ def _preparar_schema_estrito(schema: dict) -> dict:
         if chave in s:
             s[chave] = [_preparar_schema_estrito(sub) for sub in s[chave]]
 
-    # Modelos aninhados ficam em $defs (referenciados por $ref) e também precisam das regras
-    if "$defs" in s:
-        s["$defs"] = {nome: _preparar_schema_estrito(sub) for nome, sub in s["$defs"].items()}
+    # Modelos aninhados do Pydantic ficam em $defs (ex.: RegraRawLLM dentro da extração)
+    for chave in ("$defs", "definitions"):
+        if chave in s:
+            s[chave] = {nome: _preparar_schema_estrito(sub) for nome, sub in s[chave].items()}
 
     return s
 
