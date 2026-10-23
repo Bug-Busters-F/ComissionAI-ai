@@ -15,11 +15,11 @@ Documento para o time do Spring. Fonte da verdade: `src/app/schemas/proposta.py`
 |---|---|---|
 | `POST /api/v2/interpretar` | Pedido em linguagem natural → lista de propostas (agente com ferramentas) | Implementada (IA-1/2/3/4) |
 | `POST /api/v2/simular` | Propostas → simulação em sandbox (template ou código livre) | Implementada (requisito do cliente) |
-| `POST /api/v2/reinterpretar` | Texto alterado de uma regra → proposta(s) de substituição | **Stub 501** (IA-6, Humberto) |
-| `POST /api/v2/atualizar-artefatos` | Campos editados → explicação/código atualizados | **Stub 501** (IA-6/IA-7, Humberto) |
+| `POST /api/v2/reinterpretar` | Texto alterado de uma regra → proposta(s) de substituição | Implementada (IA-6) |
+| `POST /api/v2/atualizar-artefatos` | Campos editados → explicação/código atualizados | Implementada (IA-6/IA-7) |
 
 Erros: mesmo formato do v1 (`{"detail", "error_code"}`): `401 LLM_AUTH_ERROR`, `429 LLM_RATE_LIMIT_ERROR`,
-`502 LLM_PROVIDER_ERROR`, `504 LLM_TIMEOUT_ERROR`, `422` (validação), `501 NAO_IMPLEMENTADO` (stubs).
+`502 LLM_PROVIDER_ERROR`, `504 LLM_TIMEOUT_ERROR`, `422` (validação).
 
 ## `POST /api/v2/interpretar`
 
@@ -72,12 +72,12 @@ Resposta:
 | `propostas[]` | Uma por regra. `idLocal` (`p1`, `p2`…) só correlaciona dentro da resposta; **não é id de negócio**. |
 | `condicoes.faixaValor` | `{min, max, minInclusivo, maxInclusivo}` sobre o valor **de cada venda**. Padrão `[min, max)`. |
 | `condicoes.matricula` | String (ex.: `MATRIC-56`). |
-| `operacao` / `taxa` | Só `TAXA_ABSOLUTA` é preenchida pelo IA-2. Ajustes sobre a base (pp/relativo) são do IA-5 e voltam com `taxa=null` + pendência. |
+| `operacao` / `taxa` | `operacao` guarda o que o gestor pediu: `TAXA_ABSOLUTA` (valor = taxa) ou ajuste sobre a base (`ADICIONAR_PP`/`REDUZIR_PP`/`AUMENTAR_PERCENTUAL`/`REDUZIR_PERCENTUAL`, valor = delta em escala decimal: 1 p.p. ou 1% = `0.0100`). Nos ajustes, `taxa` é a **taxa final** calculada sobre a base consultada (escala 4, `HALF_UP`; ex.: base 2,5% +1 p.p. = `0.0350`; +1% relativo = `0.0253`) e a base fica em `referencias` (`BASE_COMISS`, `taxaBase`). Sem base única: `taxa=null` + pendência (`BASE_AUSENTE`, `AMBIGUIDADE_PUBLICO` quando o público abrange várias bases, `TOOL_FALHA`). Expressão ambígua (ex.: "mais 1%": pontos ou relativo?) volta com `operacao=null`, `taxa=null` e `TAXA_INVALIDA` com `pergunta`. |
 | `bonus` | `{percentual, valorFixo}`: adicional **sobre a venda** (valor fixo **por venda**). |
 | `origem` | Trecho **literal** do pedido (validado contra o texto). |
 | `referencias` | De onde veio cada dado consultado (cadastro, base, regra). |
 | `evidencias` / `trilhaFerramentas` | Ferramentas usadas, argumentos, status (`OK`/`SEM_DADOS`/`AMBIGUO`/`FALHA`), resumo e duração. |
-| `explicacao` / `codigoPython` | `null` até o IA-7 (Humberto). |
+| `explicacao` / `codigoPython` | Gerados dos campos finais de cada proposta (IA-7). A explicação cita o trecho, a base e a operação, os cadastros, a vigência (herdada ou não) e as edições manuais. O Python é o motor do template de simulação com a regra embutida: `simular(vendas, regras, cenario)` recebe as **demais** regras da proposta; equivalência validada contra os casos de ouro. `codigoPython=null` se o código não passar na análise estática. |
 | `confianca` | Determinística (não é o LLM). Não persistir. |
 | `trechosNaoMapeados` | Partes do pedido que não viraram regra. Nada é descartado em silêncio. |
 | `status` | `PROPOSTA_COMPLETA`, `PROPOSTA_COM_PENDENCIAS` ou `SEM_PROPOSTA`. |
@@ -93,6 +93,24 @@ Cada pendência: `{codigo, mensagem, campo, pergunta}`. Códigos são estáveis:
 apurado é devolvido com `LIMITE_AGENTE_ATINGIDO`. **Timeout em cascata:** o `AI_READ_TIMEOUT` do Spring deve ficar
 acima de 45s (já em 60s). Falha do LLM *depois* de haver propostas devolve o apurado com `TOOL_FALHA`; erro de
 autenticação (401) continua propagando.
+
+## `POST /api/v2/reinterpretar` (IA-6)
+Entrada: `idLocal`, `textoAlterado`, `blocoAtual`, `demaisBlocos`, `vigenciaCampanha`, `contexto`, `catalogo`.
+- Só o bloco `idLocal` é reinterpretado; `demaisBlocos` são apenas lidos (conflitos) e **não** voltam na resposta.
+- O que o texto novo não cita é herdado do `blocoAtual` (público, faixa, taxa/operação/bônus); o que ele cita é
+  reinterpretado. O frontend confirma antes de substituir valores editados manualmente.
+- `propostasSubstituicao`: 1 bloco mantém o `idLocal`; divisão em vários gera `p1`, `p1_2`, `p1_3`…
+- `camposAlterados`: caminhos alterados em relação ao `blocoAtual` (ex.: `taxa`, `operacao`, `condicoes.codLoja`).
+- `CONFLITO_REGRA` só para público, faixa e período sobrepostos **com a mesma especificidade** (o motor não teria
+  regra vencedora), comparando com `demaisBlocos` e entre os blocos da própria divisão.
+- `contexto.origem=VERSAO_EXISTENTE`: a consulta de concorrência ignora a própria campanha (`ignorarCampanhaId`).
+
+## `POST /api/v2/atualizar-artefatos` (IA-6/IA-7)
+Entrada: `bloco` (campos atuais), `camposEditados`, `origemCampos` (`MANUAL`/`IA`), `contexto`.
+- Determinístico: não chama o LLM nem reinterpreta texto; nenhum campo é alterado por inferência.
+- Campos em `camposEditados` contam como `MANUAL`, salvo indicação diferente em `origemCampos`.
+- Taxa `MANUAL`: `operacao` vira `TAXA_ABSOLUTA` com o novo valor, a referência `BASE_COMISS` sai e as pendências de
+  `taxa` são substituídas; a explicação informa "definida manualmente pelo gestor (origem: MANUAL)".
 
 ## `POST /api/v2/simular`
 ```json
