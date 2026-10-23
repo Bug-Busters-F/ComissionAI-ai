@@ -82,6 +82,7 @@ class AgenteInterpretador:
         pendencias_gerais = list(extracao.pendencias_gerais)
 
         invalidas = 0
+        parada: tuple[CodigoPendencia, str] | None = None
         while True:
             # lacunas sem ferramenta registrada não são perseguidas (nem viram falha)
             lacunas = [l for l in estado.lacunas_abertas() if self._tools.obter(l.ferramenta)]
@@ -89,11 +90,12 @@ class AgenteInterpretador:
                 break
             motivo = orcamento.motivo_parada()
             if motivo:
-                self._registrar_limite(estado, lacunas, motivo)
+                parada = (CodigoPendencia.LIMITE_AGENTE_ATINGIDO, f"{motivo} atingido")
                 break
             orcamento.passos += 1  # um passo = uma iteração do laço (decisão + consulta)
             decisao = self._decidir(lacunas, estado, orcamento, pendencias_gerais)
             if decisao is None:
+                parada = (CodigoPendencia.TOOL_FALHA, "o modelo ficou indisponível")
                 break  # LLM indisponível no meio do laço: preserva o apurado
             if decisao == "INVALIDA":
                 invalidas += 1
@@ -105,12 +107,19 @@ class AgenteInterpretador:
                             "as lacunas restantes exigem revisão humana.",
                         )
                     )
+                    parada = (CodigoPendencia.LIMITE_AGENTE_ATINGIDO, "o agente não produziu uma consulta válida")
                     break
                 continue
             if decisao.acao == "FINALIZAR":
+                parada = (CodigoPendencia.LIMITE_AGENTE_ATINGIDO, "o agente encerrou a análise antes")
                 break
             lacuna, argumentos = self._resolver_lacuna(decisao, lacunas)
             self._executar_consulta(lacuna, argumentos, estado, orcamento)
+
+        # sem pendência, a condição não conferida sumiria e a regra valeria para todo o público
+        if parada:
+            restantes = [l for l in estado.lacunas_abertas() if self._tools.obter(l.ferramenta)]
+            self._registrar_limite(estado, restantes, *parada)
 
         for b in estado.blocos:
             self._recalcular_confianca(b)
@@ -367,12 +376,15 @@ class AgenteInterpretador:
             )
 
     # -------------------------------------------------------------- fechamento
-    def _registrar_limite(self, estado: EstadoAgente, lacunas: list[Lacuna], motivo: str) -> None:
+    def _registrar_limite(
+        self, estado: EstadoAgente, lacunas: list[Lacuna], codigo: CodigoPendencia, motivo: str
+    ) -> None:
         for l in lacunas:
+            termos = ", ".join(f"{k}='{v}'" for k, v in l.argumentos.items() if isinstance(v, (str, int)))
             estado.bloco(l.bloco).bloco.pendencias.append(
                 pendencia(
-                    CodigoPendencia.LIMITE_AGENTE_ATINGIDO,
-                    f"A consulta '{l.ferramenta}' não foi feita ({motivo} atingido).",
+                    codigo,
+                    f"A consulta '{l.ferramenta}'" + (f" ({termos})" if termos else "") + f" não foi feita: {motivo}.",
                     None,
                     "Revise manualmente esta informação.",
                 )

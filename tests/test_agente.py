@@ -178,6 +178,23 @@ class TestFalhas(unittest.TestCase):
         self.assertEqual(r.propostas[0].condicoes.codLoja, 75)
         self.assertTrue(any(p.codigo.value == "TOOL_FALHA" for p in r.pendenciasGerais))
 
+    def test_llm_cai_antes_de_conferir_publico_nao_apaga_a_condicao(self):
+        client, chamadas = backend()
+        ext = {"regras": [
+            {"trecho_origem": "3% para vendedores da loja 75", "taxa_raw": "3%", "cargo_raw": "vendedores", "loja_raw": "75"},
+            {"trecho_origem": "2% para gerentes de loja da marca PRETO", "taxa_raw": "2%",
+             "cargo_raw": "gerentes de loja", "marca_raw": "PRETO"},
+        ], "vigencia_inicio_raw": "dezembro"}
+        provider = llm([LLMTimeoutError()], extracao=ext)
+        r = AgenteInterpretador(provider, criar_registry(client)).executar(
+            req(texto="3% para vendedores da loja 75 e 2% para gerentes de loja da marca PRETO em dezembro"))
+        self.assertEqual(chamadas, [])
+        for bloco in r.propostas:
+            self.assertIn("TOOL_FALHA", cod(bloco))
+        mensagens = " ".join(p.mensagem for b in r.propostas for p in b.pendencias)
+        self.assertIn("vendedores", mensagens)
+        self.assertIn("PRETO", mensagens)
+
     def test_erro_de_autenticacao_propaga(self):
         client, _ = backend()
         provider = llm([LLMAuthenticationError()])
