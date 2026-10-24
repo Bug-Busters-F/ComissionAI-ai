@@ -113,6 +113,7 @@ class TestBloqueioEmExecucao(unittest.TestCase):
         self.assertFalse(r.ok)
         self.assertIn(r.erro, ("TIMEOUT", "MEMORIA"))
 
+    @unittest.skipIf(sys.platform == "win32", "rlimit (limite de memória por processo) é exclusivo de sistemas Unix/POSIX")
     def test_memoria_excessiva(self):
         with patch.object(settings, "sim_max_memory_mb", 128):
             r = rodar(corpo("x = [0] * (10**9)", "return {'n': len(x)}"))

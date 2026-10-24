@@ -83,7 +83,7 @@ Edite o `.env` com os valores corretos:
 | `LLM_MODEL`             | Modelo específico (vazio usa o padrão do provedor)           | `gemini-3.6-flash` | `gemini-3.6-flash`   |
 | `LLM_TEMPERATURE`       | Temperatura de inferência (0.0 para determinismo estruturado)| `0.0`              | `0.0`                |
 | `LLM_TIMEOUT_SECONDS`   | Tempo limite em segundos para a chamada ao provedor          | `30`               | `30`                 |
-| `LLM_MAX_OUTPUT_TOKENS` | Limite máximo de tokens gerados na resposta                  | `1024`             | `1024`               |
+| `LLM_MAX_OUTPUT_TOKENS` | Limite máximo de tokens gerados na resposta                  | `4096`             | `1024`               |
 | `APP_HOST`              | Host em que o servidor FastAPI escuta                        | `0.0.0.0`          | `0.0.0.0`            |
 | `APP_PORT`              | Porta em que o serviço sobe                                  | `8000`             | `8000`               |
 | `APP_RELOAD`            | Hot reload para desenvolvimento local                        | `true`             | `false`              |
