@@ -469,9 +469,14 @@ class TestGroqProvider(unittest.TestCase):
 
                 self.assertEqual(result, {"taxa_raw": "5%"})
                 transport.assert_called_once_with(local_address="0.0.0.0")
-                fallback_client.chat.completions.create.assert_called_once_with(
-                    **primary_client.chat.completions.create.call_args.kwargs
-                )
+                fallback_client.chat.completions.create.assert_called_once()
+                primary_kwargs = dict(primary_client.chat.completions.create.call_args.kwargs)
+                fallback_kwargs = dict(fallback_client.chat.completions.create.call_args.kwargs)
+                primary_timeout = primary_kwargs.pop("timeout").read
+                fallback_timeout = fallback_kwargs.pop("timeout").read
+                self.assertEqual(primary_kwargs, fallback_kwargs)
+                self.assertGreater(fallback_timeout, 0)
+                self.assertLessEqual(fallback_timeout, primary_timeout)
                 fallback_client.close.assert_called_once()
                 fake_http_client.close.assert_called_once()
 

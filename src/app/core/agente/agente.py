@@ -1,10 +1,9 @@
 """
 Agente interpretador (Sprint 2, IA-4 / BUG-55).
 
-Laço independente de provedor: a cada passo o LLM devolve uma DECISÃO
-estruturada; o Python valida, executa a ferramenta e atualiza o estado. Lacunas são
-calculadas de forma determinística; o LLM escolhe qual consultar e pode reescrever
-termos de busca, nunca conclui dados. A aprovação continua com o usuário.
+A extração usa o LLM; as consultas conhecidas são agendadas pelo Python, sem
+novas chamadas ao modelo. O modo de decisões por LLM permanece opcional para
+compatibilidade. Ambos preservam pendências, evidências e aprovação pelo usuário.
 """
 
 import logging
@@ -17,6 +16,7 @@ from app.core.agente.decisao import DecisaoAgente
 from app.core.agente.estado import EstadoAgente, Lacuna
 from app.core.agente.hooks import Hooks, HooksPadrao
 from app.core.agente.limites import Limites, Orcamento
+from app.core.config import settings
 from app.core.exceptions import LLMAuthenticationError, LLMBaseException
 from app.core.llm_retry import completar_com_retry
 from app.core.normalizers.confianca import calcular_confianca
@@ -60,6 +60,7 @@ class AgenteInterpretador:
         hooks: Hooks | None = None,
         limites: Limites | None = None,
         relogio: Callable[[], float] = time.monotonic,
+        usar_llm_decisoes: bool | None = None,
     ) -> None:
         self._provider = provider
         self._tools = tools
@@ -67,6 +68,7 @@ class AgenteInterpretador:
         self._limites = limites
         self._relogio = relogio
         self._extrator = ExtratorCampanha(provider)
+        self._usar_llm_decisoes = settings.agent_use_llm_decisions if usar_llm_decisoes is None else usar_llm_decisoes
 
     # ------------------------------------------------------------------ fluxo
     def executar(self, request: InterpretarRequestV2) -> InterpretarResponseV2:
@@ -81,6 +83,50 @@ class AgenteInterpretador:
         estado = EstadoAgente(blocos=blocos, competencia=request.competencia, ignorar_campanha_id=ignorar)
         pendencias_gerais = list(extracao.pendencias_gerais)
 
+        if self._usar_llm_decisoes:
+            parada = self._consultar_com_llm(estado, orcamento, pendencias_gerais)
+        else:
+            parada = self._consultar_deterministicamente(estado, orcamento)
+
+        # sem pendência, a condição não conferida sumiria e a regra valeria para todo o público
+        if parada:
+            restantes = [l for l in estado.lacunas_abertas() if self._tools.obter(l.ferramenta)]
+            self._registrar_limite(estado, restantes, *parada)
+
+        for b in estado.blocos:
+            self._recalcular_confianca(b)
+        finais = self._hooks.antes_de_fechar([b.bloco for b in estado.blocos], {"request": request})
+        return self._resposta(request, finais, pendencias_gerais, extracao, estado)
+
+    def _lacunas_consultaveis(self, estado: EstadoAgente) -> list[Lacuna]:
+        return [l for l in estado.lacunas_abertas() if self._tools.obter(l.ferramenta)]
+
+    def _consultar_deterministicamente(
+        self, estado: EstadoAgente, orcamento: Orcamento
+    ) -> tuple[CodigoPendencia, str] | None:
+        # Resolve cadastros antes das consultas que dependem deles. O cache é
+        # aplicado primeiro, inclusive quando o orçamento de novas consultas acabou.
+        prioridade = {"PUBLICO": 0, "MATRICULA": 1, "BASE": 2, "CONCORRENCIA": 3}
+        while lacunas := self._lacunas_consultaveis(estado):
+            lacuna = min(lacunas, key=lambda l: (
+                estado.chave_cache(l.ferramenta, l.argumentos) not in estado.cache,
+                prioridade.get(l.tipo, 4),
+            ))
+            em_cache = estado.chave_cache(lacuna.ferramenta, lacuna.argumentos) in estado.cache
+            if em_cache:
+                if orcamento.decorrido >= orcamento.limites.max_duration_seconds:
+                    return CodigoPendencia.LIMITE_AGENTE_ATINGIDO, "limite de duração atingido"
+            else:
+                motivo = orcamento.motivo_parada()
+                if motivo:
+                    return CodigoPendencia.LIMITE_AGENTE_ATINGIDO, f"{motivo} atingido"
+                orcamento.passos += 1
+            self._executar_consulta(lacuna, lacuna.argumentos, estado, orcamento)
+        return None
+
+    def _consultar_com_llm(
+        self, estado: EstadoAgente, orcamento: Orcamento, pendencias_gerais: list[Pendencia]
+    ) -> tuple[CodigoPendencia, str] | None:
         invalidas = 0
         parada: tuple[CodigoPendencia, str] | None = None
         while True:
@@ -116,15 +162,7 @@ class AgenteInterpretador:
             lacuna, argumentos = self._resolver_lacuna(decisao, lacunas)
             self._executar_consulta(lacuna, argumentos, estado, orcamento)
 
-        # sem pendência, a condição não conferida sumiria e a regra valeria para todo o público
-        if parada:
-            restantes = [l for l in estado.lacunas_abertas() if self._tools.obter(l.ferramenta)]
-            self._registrar_limite(estado, restantes, *parada)
-
-        for b in estado.blocos:
-            self._recalcular_confianca(b)
-        finais = self._hooks.antes_de_fechar([b.bloco for b in estado.blocos], {"request": request})
-        return self._resposta(request, finais, pendencias_gerais, extracao, estado)
+        return parada
 
     # ---------------------------------------------------------------- decisão
     def _decidir(

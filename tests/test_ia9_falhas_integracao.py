@@ -214,7 +214,7 @@ class TestIA9FalhasEIntegracao(unittest.TestCase):
         self.assertTrue(any(pend.codigo == CodigoPendencia.CADASTRO_INEXISTENTE for pend in p.pendencias))
 
     def test_llm_cai_apos_resolver_publico_preserva_loja(self):
-        """Se o LLM falhar no meio do laço, os dados apurados até então são preservados e TOOL_FALHA é incluído em pendenciasGerais."""
+        """No modo opcional de decisões por LLM, uma falha preserva os dados e gera TOOL_FALHA."""
         extracao = {
             "regras": [
                 {
@@ -251,8 +251,11 @@ class TestIA9FalhasEIntegracao(unittest.TestCase):
             LLMTimeoutError("Timeout do provedor LLM"),
         ]
 
-        agente = AgenteInterpretador(provider, registry, hooks=HooksAjusteSobreBase())
+        agente = AgenteInterpretador(
+            provider, registry, hooks=HooksAjusteSobreBase(), usar_llm_decisoes=True
+        )
         res = agente.executar(InterpretarRequestV2(texto="3% para gerentes da loja 75 e 2% para vendedores"))
+        self.assertEqual(provider.complete.call_count, 2)
 
         # Preservou as propostas extraídas
         self.assertEqual(len(res.propostas), 2)
