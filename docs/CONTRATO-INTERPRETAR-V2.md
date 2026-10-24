@@ -88,11 +88,35 @@ Resposta:
 `TOOL_FALHA`, `LIMITE_AGENTE_ATINGIDO`, `TAXA_INVALIDA`, `SIMULACAO_NAO_VALIDADA`, `NAO_SUPORTADO_NA_APURACAO`.
 Cada pendência: `{codigo, mensagem, campo, pergunta}`. Códigos são estáveis: tratem pelo `codigo`, não pelo texto.
 
-### Limites do agente (por requisição)
-`AGENT_MAX_STEPS=6`, `AGENT_MAX_TOOL_CALLS=8`, `AGENT_MAX_DURATION_SECONDS=45`. Ao atingir um limite, o que já foi
-apurado é devolvido com `LIMITE_AGENTE_ATINGIDO`. **Timeout em cascata:** o `AI_READ_TIMEOUT` do Spring deve ficar
-acima de 45s (já em 60s). Falha do LLM *depois* de haver propostas devolve o apurado com `TOOL_FALHA`; erro de
-autenticação (401) continua propagando.
+### Consultas e limites do agente (por requisição)
+
+Por padrão, `AGENT_USE_LLM_DECISIONS=false`: o LLM faz a extração bruta inicial. O Python agenda as
+consultas conhecidas na ordem cadastro → matrícula → base → concorrência, conforme as dependências
+resolvidas. Ferramentas e argumentos continuam sendo validados e todas as evidências são devolvidas.
+Consultas idênticas reaproveitam o cache da requisição, incluindo a evidência em cada bloco afetado.
+Reaproveitar um resultado não consome outro passo nem outra consulta do orçamento.
+
+`AGENT_MAX_STEPS=6`, `AGENT_MAX_TOOL_CALLS=8`, `AGENT_MAX_DURATION_SECONDS=45`. A extração consome um passo;
+cada nova consulta consome outro. O tempo continua sendo verificado entre consultas, inclusive antes de
+usar o cache. Ao atingir um limite, os blocos são preservados e as consultas não feitas recebem
+`LIMITE_AGENTE_ATINGIDO`. O timeout de cada ferramenta continua em `TOOL_TIMEOUT_SECONDS`.
+
+O modo anterior pode ser habilitado com `AGENT_USE_LLM_DECISIONS=true`; nesse modo há chamadas adicionais
+ao modelo para decisões e permanecem as proteções contra paradas antecipadas. Falha do LLM após a extração
+mantém o apurado com `TOOL_FALHA`; erro de autenticação propaga. O modo padrão elimina essas chamadas
+adicionais para consultas já determinadas pelo código.
+
+Para Groq, `LLM_RATE_LIMIT_MAX_RETRIES=1` permite uma retentativa de 429 somente se houver `Retry-After`
+válido, com espera no máximo `LLM_RATE_LIMIT_MAX_WAIT_SECONDS=5`, e se ela couber no tempo restante de
+`LLM_TIMEOUT_SECONDS`. A segunda tentativa e o fallback IPv4 usam o timeout restante, sem reiniciar o
+orçamento. Sem prazo, com prazo longo, ou após esgotar as tentativas, o erro propaga como
+`429 LLM_RATE_LIMIT_ERROR`. Quando disponível, o serviço devolve `Retry-After` no cabeçalho da resposta,
+arredondado para cima em segundos. O corpo de erro mantém `{detail, error_code}`. Autenticação e
+permissão não são retentadas. Isso não amplia a cota da organização na Groq.
+
+O `AI_READ_TIMEOUT` do Spring continua configurado em 60s; não é necessário mudar o contrato de proposta
+nem o formulário para usar o modo padrão. Caso o Spring precise apresentar a espera ao navegador, ele
+precisa preservar o status/cabeçalho recebido da IA (não implementado por esta alteração).
 
 ## `POST /api/v2/reinterpretar` (IA-6)
 Entrada: `idLocal`, `textoAlterado`, `blocoAtual`, `demaisBlocos`, `vigenciaCampanha`, `contexto`, `catalogo`.

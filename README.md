@@ -27,3 +27,10 @@ O objetivo é aplicar técnicas de IA generativa e engenharia de software assist
 | Dom Rock | 6º ADS (Análise e Desenvolvimento de Sistemas) | Claudio Lima<br>claudio.lima@cps.sp.gov.br | Walmir Duque<br>jose.duque@cps.sp.gov.br | Andre F. de Almeida<br>andre.almeida@domrock.com.br |
 
 <img width="438" height="149" alt="bug-busters-logo-black" src="https://github.com/user-attachments/assets/10c4d8ea-25bb-439c-9028-dc185ac75952" />
+
+## Interpretação multirregras e limites da Groq
+
+As consultas conhecidas do agente são executadas pelo Python por padrão, usando uma extração do modelo
+por interpretação bem-sucedida, sem decisões adicionais de LLM. Retentativas em falhas podem emitir
+mais de uma requisição ao provedor. O tratamento de 429 respeita `Retry-After` com espera limitada.
+Configuração, comparação de branches e evidências: [guia rápido](docs/GUIA-CONSULTAS-AGENTE-E-RATE-LIMIT.md).

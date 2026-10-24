@@ -40,6 +40,11 @@ def trigger_unexpected_error():
     raise RuntimeError("Bug não previsto, não relacionado a LLM.")
 
 
+@app.get("/test/error/rate-limit-retry")
+def trigger_rate_limit_with_retry():
+    raise LLMRateLimitError("Aguarde liberação da cota.", retry_after_seconds=2.1)
+
+
 class TestAPIExceptionHandlers(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app)
@@ -62,6 +67,16 @@ class TestAPIExceptionHandlers(unittest.TestCase):
         data = response.json()
         self.assertEqual(data["error_code"], "LLM_RATE_LIMIT_ERROR")
         self.assertIn("Cota esgotada", data["detail"])
+
+    def test_rate_limit_mantem_cabecalho_retry_after_sem_alterar_corpo(self):
+        response = self.client.get("/test/error/rate-limit-retry")
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.headers["retry-after"], "3")
+        self.assertEqual(response.json(), {"detail": "Aguarde liberação da cota.", "error_code": "LLM_RATE_LIMIT_ERROR"})
+
+    def test_rate_limit_sem_prazo_nao_inventa_retry_after(self):
+        response = self.client.get("/test/error/rate-limit")
+        self.assertNotIn("retry-after", response.headers)
 
     def test_timeout_status_504(self):
         response = self.client.get("/test/error/timeout")

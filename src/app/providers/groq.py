@@ -17,7 +17,10 @@ Nota sobre JSON Schema:
 
 import json
 import logging
+import math
 import time
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 
 import httpx
 from app.core.config import settings
@@ -73,6 +76,28 @@ def _preparar_schema_estrito(schema: dict) -> dict:
             s[chave] = {nome: _preparar_schema_estrito(sub) for nome, sub in s[chave].items()}
 
     return s
+
+
+def _retry_after_seconds(exc: Exception) -> float | None:
+    """Só um cabeçalho permitido é lido; corpo da falha/credenciais não são expostos."""
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None)
+    if headers is None:
+        return None
+    value = headers.get("retry-after")
+    if not isinstance(value, str):
+        return None
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            when = parsedate_to_datetime(value)
+            if when.tzinfo is None:
+                when = when.replace(tzinfo=timezone.utc)
+            seconds = (when - datetime.now(timezone.utc)).total_seconds()
+        except (TypeError, ValueError, OverflowError):
+            return None
+    return seconds if math.isfinite(seconds) and seconds >= 0 else None
 
 
 class GroqProvider(LLMProvider):
@@ -155,11 +180,41 @@ class GroqProvider(LLMProvider):
                 elapsed,
             )
             try:
+                timeout = payload.get("timeout")
+                if isinstance(timeout, httpx.Timeout):
+                    remaining = timeout.read - elapsed
+                    if remaining <= 0:
+                        raise primary_error
+                    payload = {**payload, "timeout": httpx.Timeout(remaining, connect=min(3.0, remaining))}
                 return self._complete_ipv4(payload)
             except (groq.APIConnectionError, groq.APITimeoutError, TimeoutError):
                 # Mantém o erro original para que o tratamento existente
                 # classifique a causa sem expor detalhes da chave ou do prompt.
                 raise primary_error from None
+
+    def _complete_with_rate_limit_retry(self, payload: dict):
+        import groq
+
+        deadline = time.monotonic() + self._timeout
+        for attempt in range(settings.llm_rate_limit_max_retries + 1):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise LLMTimeoutError("Tempo limite excedido ao aguardar liberação da Groq.")
+            request = {**payload, "timeout": httpx.Timeout(remaining, connect=min(3.0, remaining))}
+            try:
+                return self._complete_with_ipv4_fallback(request)
+            except groq.RateLimitError as exc:
+                delay = _retry_after_seconds(exc)
+                remaining = deadline - time.monotonic()
+                if (
+                    attempt >= settings.llm_rate_limit_max_retries
+                    or delay is None
+                    or delay > settings.llm_rate_limit_max_wait_seconds
+                    or delay >= remaining
+                ):
+                    raise
+                logger.warning("Limite da Groq atingido; nova tentativa em %.2fs (tentativa %s).", delay, attempt + 1)
+                time.sleep(delay)
 
     def complete(self, prompt: str, response_schema: dict) -> dict:
         """Chama a Groq com saída estruturada via JSON Schema estrito."""
@@ -168,17 +223,21 @@ class GroqProvider(LLMProvider):
         schema_estrito = _preparar_schema_estrito(response_schema)
 
         try:
-            response = self._complete_with_ipv4_fallback(
+            response = self._complete_with_rate_limit_retry(
                 self._request_payload(prompt, schema_estrito)
             )
         except groq.AuthenticationError:
             raise LLMAuthenticationError(
                 "Credenciais inválidas ou não autorizadas para a Groq."
             ) from None
-        except (groq.RateLimitError, groq.PermissionDeniedError):
-            raise LLMRateLimitError(
-                "Limite de requisições ou cota excedida na API da Groq."
-            ) from None
+        except groq.RateLimitError as exc:
+            delay = _retry_after_seconds(exc)
+            message = "Limite de requisições ou cota excedida na API da Groq."
+            if delay is not None:
+                message += f" Tente novamente em {math.ceil(delay)} segundo(s)."
+            raise LLMRateLimitError(message, retry_after_seconds=delay) from None
+        except groq.PermissionDeniedError:
+            raise LLMAuthenticationError("Acesso ao modelo não autorizado na Groq.") from None
         except (groq.APITimeoutError, TimeoutError):
             raise LLMTimeoutError(
                 f"Tempo limite ({settings.llm_timeout_seconds}s) excedido ao comunicar com a Groq."

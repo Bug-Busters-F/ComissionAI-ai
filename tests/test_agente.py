@@ -1,10 +1,10 @@
-"""Testes do ciclo do agente (IA-4): decisões, ferramentas, limites e rastreabilidade."""
+"""Regressão do modo opcional de decisões por LLM; modo padrão em test_agente_deterministico."""
 
 import os
 import sys
 import unittest
 from datetime import date
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import httpx
 
@@ -82,6 +82,7 @@ def cod(bloco):
     return {p.codigo.value for p in bloco.pendencias}
 
 
+@patch("app.core.config.settings.agent_use_llm_decisions", True)
 class TestFluxoDemonstravel(unittest.TestCase):
     def test_analise_consulta_validacao(self):
         client, chamadas = backend()
@@ -144,6 +145,7 @@ class TestFluxoDemonstravel(unittest.TestCase):
         self.assertIn(b'"ignorarCampanhaId":"camp-1"', enviados[0].replace(b" ", b""))
 
 
+@patch("app.core.config.settings.agent_use_llm_decisions", True)
 class TestFalhas(unittest.TestCase):
     def test_falha_de_tool_nao_inventa_e_preserva(self):
         client, _ = backend({"/cargos": lambda q: httpx.Response(503), "/lojas": lambda q: httpx.Response(503)})
@@ -222,6 +224,7 @@ class TestFalhas(unittest.TestCase):
         self.assertFalse(any("INVENTADA" in p for p in chamadas))
 
 
+@patch("app.core.config.settings.agent_use_llm_decisions", True)
 class TestLimites(unittest.TestCase):
     def test_max_tool_calls(self):
         client, chamadas = backend()
@@ -269,6 +272,7 @@ class TestLimites(unittest.TestCase):
         self.assertEqual(len(reaproveitados), 1)
 
 
+@patch("app.core.config.settings.agent_use_llm_decisions", True)
 class TestHooksEContrato(unittest.TestCase):
     def test_hooks_padrao_sao_identidade_e_hook_customizado_e_chamado(self):
         client, _ = backend()
