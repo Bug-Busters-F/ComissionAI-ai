@@ -9,6 +9,7 @@ Camadas:
 """
 
 import logging
+import math
 
 import uvicorn
 from fastapi import FastAPI
@@ -16,8 +17,9 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from app.api.routes.health import router as health_router
 from app.api.routes.interpretador import router as interpretador_router
+from app.api.routes.v2 import router as v2_router
 from app.core.config import settings
-from app.core.exceptions import LLMBaseException
+from app.core.exceptions import LLMBaseException, LLMRateLimitError
 
 logging.basicConfig(
     level=logging.INFO,
@@ -45,8 +47,12 @@ async def llm_exception_handler(request, exc: LLMBaseException):
         request.method,
         request.url.path,
     )
+    headers = None
+    if isinstance(exc, LLMRateLimitError) and exc.retry_after_seconds is not None:
+        headers = {"Retry-After": str(math.ceil(exc.retry_after_seconds))}
     return JSONResponse(
         status_code=exc.status_code,
+        headers=headers,
         content={
             "detail": exc.message,
             "error_code": exc.error_code,
@@ -76,6 +82,7 @@ async def unhandled_exception_handler(request, exc: Exception):
 # --- Routers ---
 app.include_router(health_router)
 app.include_router(interpretador_router)
+app.include_router(v2_router)
 
 
 if __name__ == "__main__":

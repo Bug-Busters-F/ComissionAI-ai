@@ -26,8 +26,13 @@ class LLMAuthenticationError(LLMBaseException):
 class LLMRateLimitError(LLMBaseException):
     """Limite de requisições ou cota do provedor de LLM excedida."""
 
-    def __init__(self, message: str = "Limite de cota ou taxa de requisições excedido junto ao provedor de LLM.") -> None:
+    def __init__(
+        self,
+        message: str = "Limite de cota ou taxa de requisições excedido junto ao provedor de LLM.",
+        retry_after_seconds: float | None = None,
+    ) -> None:
         super().__init__(message=message, status_code=429, error_code="LLM_RATE_LIMIT_ERROR")
+        self.retry_after_seconds = retry_after_seconds
 
 
 class LLMTimeoutError(LLMBaseException):

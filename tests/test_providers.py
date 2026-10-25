@@ -469,9 +469,14 @@ class TestGroqProvider(unittest.TestCase):
 
                 self.assertEqual(result, {"taxa_raw": "5%"})
                 transport.assert_called_once_with(local_address="0.0.0.0")
-                fallback_client.chat.completions.create.assert_called_once_with(
-                    **primary_client.chat.completions.create.call_args.kwargs
-                )
+                fallback_client.chat.completions.create.assert_called_once()
+                primary_kwargs = dict(primary_client.chat.completions.create.call_args.kwargs)
+                fallback_kwargs = dict(fallback_client.chat.completions.create.call_args.kwargs)
+                primary_timeout = primary_kwargs.pop("timeout").read
+                fallback_timeout = fallback_kwargs.pop("timeout").read
+                self.assertEqual(primary_kwargs, fallback_kwargs)
+                self.assertGreater(fallback_timeout, 0)
+                self.assertLessEqual(fallback_timeout, primary_timeout)
                 fallback_client.close.assert_called_once()
                 fake_http_client.close.assert_called_once()
 
@@ -489,6 +494,33 @@ class TestGroqProvider(unittest.TestCase):
                         provider.complete("teste prompt", {})
 
                 transport.assert_not_called()
+
+
+class TestSchemaEstritoGroq(unittest.TestCase):
+    def test_modelos_aninhados_em_defs_ficam_estritos(self):
+        from app.providers.groq import _preparar_schema_estrito
+        from app.schemas.raw import InterpretacaoCampanhaRawLLM
+
+        schema = _preparar_schema_estrito(InterpretacaoCampanhaRawLLM.model_json_schema())
+
+        self.assertIn("RegraRawLLM", schema["$defs"])
+        objetos = []
+
+        def coletar(no):
+            if isinstance(no, dict):
+                if "properties" in no:
+                    objetos.append(no)
+                for valor in no.values():
+                    coletar(valor)
+            elif isinstance(no, list):
+                for item in no:
+                    coletar(item)
+
+        coletar(schema)
+        self.assertGreater(len(objetos), 1)
+        for objeto in objetos:
+            self.assertIs(objeto["additionalProperties"], False)
+            self.assertEqual(set(objeto["required"]), set(objeto["properties"]))
 
 
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +16,30 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.0
     llm_timeout_seconds: int = 30
     llm_max_output_tokens: int = 1024
+    # Groq: retentativa somente com Retry-After válido, dentro do timeout da chamada.
+    llm_rate_limit_max_retries: int = Field(default=1, ge=0, le=2)
+    llm_rate_limit_max_wait_seconds: float = Field(default=5.0, ge=0, le=30)
+
+    # --- Backend (Spring) consultado pelas tools do agente ---
+    backend_base_url: str = "http://localhost:8080"
+    tool_timeout_seconds: float = 5.0
+
+    # --- Agente ---
+    # Por padrão, só a extração usa o modelo; as consultas têm argumentos conhecidos.
+    agent_use_llm_decisions: bool = False
+    agent_max_steps: int = 6
+    agent_max_tool_calls: int = 8
+    agent_max_duration_seconds: float = 45.0
+    agent_max_code_executions: int = 5
+
+    # --- Simulação / sandbox ---
+    sim_max_seconds: float = 10.0
+    sim_max_memory_mb: int = 256
+    sim_max_output_kb: int = 512
+    sim_max_registros: int = 50000
+    sim_max_cenarios: int = 5
+    sim_max_code_lines: int = 150
+    sim_max_code_bytes: int = 8192
 
     # --- API ---
     app_host: str = "0.0.0.0"

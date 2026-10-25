@@ -136,7 +136,7 @@ O serviço utiliza o `pydantic-settings` para gerenciar parâmetros a partir do 
 | `LLM_MODEL` | string | Não | *padrão do provedor* | Identificador do modelo no provedor (ex: `gemini-3.6-flash`, `llama-3.3-70b-versatile`, `gpt-4o-mini`). |
 | `LLM_TEMPERATURE` | float | Não | `0.0` | Temperatura de inferência. Manter em `0.0` para determinismo e fidelidade estrutural. |
 | `LLM_TIMEOUT_SECONDS` | int | Não | `30` | Tempo máximo em segundos para resposta do provedor de LLM. |
-| `LLM_MAX_OUTPUT_TOKENS`| int | Não | `1024` | Limite de tokens na resposta gerada pelo LLM. |
+| `LLM_MAX_OUTPUT_TOKENS`| int | Não | `1024` | Limite de tokens na resposta gerada pelo LLM. Use `4096` com a Groq (`gpt-oss-20b`): o raciocínio do modelo conta nesse limite e, com `1024`, o JSON é cortado (erro `json_validate_failed` / "max completion tokens reached"). |
 | `APP_HOST` | string | Não | `0.0.0.0` | IP em que o Uvicorn aceita conexões. |
 | `APP_PORT` | int | Não | `8000` | Porta em que o serviço escuta requisições. |
 | `APP_RELOAD` | bool | Não | `false` | Habilita hot reload do Uvicorn (usar apenas em desenvolvimento). |
