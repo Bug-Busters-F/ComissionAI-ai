@@ -4,7 +4,7 @@ atualização de artefatos após edição manual (IA-6/IA-7). O contrato é vali
 e documentado no Swagger.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.agente import AgenteInterpretador
 from app.core.agente.hooks import HooksAjusteSobreBase
@@ -15,8 +15,11 @@ from app.providers import get_provider
 from app.schemas.proposta import (
     AtualizarArtefatosRequest,
     AtualizarArtefatosResponse,
+    GerarProgramaRequest,
     InterpretarRequestV2,
     InterpretarResponseV2,
+    ProgramaArmazenado,
+    ProgramaGeradoResponse,
     ReinterpretarRequest,
     ReinterpretarResponse,
     SimularRequest,
@@ -36,6 +39,41 @@ def get_simulador() -> ServicoSimulacao:
 
 
 @router.post(
+    "/gerar-programa",
+    summary="Gerar e validar o programa da simulação antes da revisão técnica (IA-2)",
+    response_model=ProgramaGeradoResponse,
+)
+def gerar_programa(
+    request: GerarProgramaRequest, servico: ServicoSimulacao = Depends(get_simulador)
+) -> ProgramaGeradoResponse:
+    """
+    Gera (quando há cálculo adicional) e valida o código ANTES de simular sobre vendas reais, devolvendo
+    uma assinatura que identifica a versão aprovada. `/simular` pode então executar exatamente esse código
+    via `codigoAprovado`/`assinaturaPrograma`, sem reinventá-lo a cada clique em simular.
+    """
+    return servico.gerar_programa(request)
+
+
+@router.get(
+    "/programa/{assinatura}",
+    summary="Recuperar o código de uma simulação pela assinatura, pra revisão posterior (IA-2)",
+    response_model=ProgramaArmazenado,
+)
+def buscar_programa(
+    assinatura: str, servico: ServicoSimulacao = Depends(get_simulador)
+) -> ProgramaArmazenado:
+    """
+    Recupera o código (TEMPLATE fixo ou CODIGO_LIVRE já gerado por /gerar-programa ou /simular)
+    pela assinatura sha256. O backend guarda só a assinatura como referência; o código em si
+    fica persistido aqui, pra quem precisar reabrir e revisar depois.
+    """
+    programa = servico.buscar_programa(assinatura)
+    if programa is None:
+        raise HTTPException(status_code=404, detail="Nenhum programa encontrado para essa assinatura.")
+    return programa
+
+
+@router.post(
     "/simular",
     summary="Simular as propostas executando código gerado em sandbox",
     response_model=SimularResponse,
@@ -44,6 +82,8 @@ def simular(request: SimularRequest, servico: ServicoSimulacao = Depends(get_sim
     """
     Resultado de SIMULAÇÃO (nunca apuração oficial). Casos genéricos usam modelo fixo; casos complexos usam
     código gerado pela IA, executado em sandbox e devolvido junto com o resultado para auditoria.
+    Aceita `vendas` (recorte já resolvido pelo backend, BACK-10) como única fonte de dados quando informado,
+    e `codigoAprovado`/`assinaturaPrograma` (de /gerar-programa, IA-2) para executar sem regerar o código.
     """
     return servico.simular(request)
 

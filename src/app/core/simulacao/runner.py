@@ -18,7 +18,10 @@ except ImportError:  # Windows (só desenvolvimento): sem rlimit; produção rod
 import sys
 
 ALLOWED = ("decimal", "datetime", "math", "statistics", "collections", "itertools", "functools",
-           "typing", "dataclasses", "enum")
+           "typing", "dataclasses", "enum",
+           "_strptime")  # import interno lazy de datetime.strptime(); sem isso, todo uso de
+           # strptime (parsing de data com formato) quebra com "ImportError: import não
+           # permitido" mesmo em código gerado legítimo — achado testando com LLM real.
 for _m in ALLOWED:
     __import__(_m)
 import builtins as _b  # noqa: E402  (pré-carregado)

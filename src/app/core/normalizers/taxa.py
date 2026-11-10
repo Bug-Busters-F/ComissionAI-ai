@@ -1,8 +1,8 @@
 """
 Normalizador determinístico de taxa e percentual de comissão (Task S1-A04).
 
-Converte representações textuais ou numéricas de comissão (ex: '5%', '3,5%', '0.05', '5 por cento')
-em Decimal de 4 casas decimais no intervalo (0.0000, 1.0000].
+Converte representações textuais ou numéricas de comissão (ex: '5%', '3,5%', '0.05', '5 por cento',
+'dez por cento') em Decimal de 4 casas decimais no intervalo (0.0000, 1.0000].
 Gera pendências descritivas caso o valor seja inválido ou fora dos limites do MVP.
 """
 
@@ -10,6 +10,8 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+
+from app.core.normalizers.extenso import localizar_numero_por_extenso, numero_por_extenso
 
 
 def normalizar_taxa(taxa_raw: str | int | float | Decimal | None) -> tuple[Decimal | None, list[str]]:
@@ -50,16 +52,17 @@ def normalizar_taxa(taxa_raw: str | int | float | Decimal | None) -> tuple[Decim
     # Extrair o primeiro número compatível com regex
     match = re.search(r"[-+]?\d+(?:\.\d+)?", cleaned)
     if not match:
-        pendencias.append(f"Não foi possível converter a taxa '{taxa_raw}' em valor numérico.")
-        return None, pendencias
-
-    num_str = match.group(0)
-
-    try:
-        val = Decimal(num_str)
-    except InvalidOperation:
-        pendencias.append(f"Valor de taxa inválido: '{taxa_raw}'.")
-        return None, pendencias
+        val = numero_por_extenso(cleaned)
+        if val is None:
+            pendencias.append(f"Não foi possível converter a taxa '{taxa_raw}' em valor numérico.")
+            return None, pendencias
+    else:
+        num_str = match.group(0)
+        try:
+            val = Decimal(num_str)
+        except InvalidOperation:
+            pendencias.append(f"Valor de taxa inválido: '{taxa_raw}'.")
+            return None, pendencias
 
     if eh_percentual:
         taxa_decimal = (val / Decimal("100")).quantize(Decimal("0.0001"))
@@ -148,17 +151,22 @@ def interpretar_operacao(operacao_raw: str | int | float | Decimal | None) -> Op
 
     numeros = _RE_NUMERO.findall(texto)
     if not numeros:
-        return OperacaoNormalizada(
-            None, None, [f"Não foi possível identificar o valor numérico na operação '{original}'."]
-        )
-    if len({n.replace(",", ".") for n in numeros}) > 1:
-        return OperacaoNormalizada(
-            None, None, [f"A operação '{original}' cita mais de um valor; informe um único ajuste."], ambigua=True
-        )
-    try:
-        valor = Decimal(numeros[0].replace(",", "."))
-    except InvalidOperation:
-        return OperacaoNormalizada(None, None, [f"Valor numérico inválido na operação: '{original}'."])
+        extenso = localizar_numero_por_extenso(texto)
+        if extenso is None:
+            return OperacaoNormalizada(
+                None, None, [f"Não foi possível identificar o valor numérico na operação '{original}'."]
+            )
+        valor = extenso
+    else:
+        if len({n.replace(",", ".") for n in numeros}) > 1:
+            return OperacaoNormalizada(
+                None, None, [f"A operação '{original}' cita mais de um valor; informe um único ajuste."],
+                ambigua=True,
+            )
+        try:
+            valor = Decimal(numeros[0].replace(",", "."))
+        except InvalidOperation:
+            return OperacaoNormalizada(None, None, [f"Valor numérico inválido na operação: '{original}'."])
     if valor <= 0:
         return OperacaoNormalizada(None, None, [f"O valor do ajuste deve ser maior que zero: '{original}'."])
     delta = (valor / Decimal("100")).quantize(_QUATRO_CASAS)

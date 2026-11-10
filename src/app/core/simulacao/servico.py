@@ -30,6 +30,7 @@ from app.core.prompts.simulacao_prompt import (
     montar_prompt_cenarios,
     montar_prompt_codigo,
 )
+from app.core.simulacao import repositorio_codigo
 from app.core.simulacao.sandbox import ResultadoSandbox, Sandbox
 from app.core.simulacao.templates import TEMPLATE_CODIGO
 from app.providers.base import LLMProvider
@@ -38,10 +39,14 @@ from app.schemas.proposta import (
     Cenario,
     CodigoPendencia,
     EvidenciaTool,
+    GerarProgramaRequest,
     Pendencia,
+    ProgramaArmazenado,
+    ProgramaGeradoResponse,
     ResultadoCenario,
     SimularRequest,
     SimularResponse,
+    VendaRecorte,
 )
 from app.tools.base import ToolRegistry
 
@@ -96,6 +101,64 @@ class ServicoSimulacao:
         self._trilha: list[EvidenciaTool] = []
 
     # ------------------------------------------------------------------ público
+    def buscar_programa(self, assinatura: str) -> ProgramaArmazenado | None:
+        """GET /programa/{assinatura}: recupera o código pra revisão posterior (IA-2)."""
+        if assinatura == _assinatura(TEMPLATE_CODIGO):
+            return ProgramaArmazenado(
+                assinatura=assinatura, codigo=TEMPLATE_CODIGO,
+                premissas=["Modelo padrão de cálculo (taxa, faixas e bônus por venda)."],
+            )
+        dado = repositorio_codigo.buscar(assinatura)
+        return ProgramaArmazenado(**dado) if dado is not None else None
+
+    def gerar_programa(self, request: GerarProgramaRequest) -> ProgramaGeradoResponse:
+        """
+        Gera e valida o programa ANTES da revisão técnica (IA-2 / BUG-115): roda a mesma geração
+        e sondagem de `simular`, mas sobre uma amostra sintética (não há vendas reais nesta etapa).
+        Devolve uma assinatura (sha256) que identifica a versão aprovada; `simular` pode depois
+        executar exatamente esse código via `codigoAprovado`/`assinaturaPrograma`, sem regerá-lo.
+        """
+        self._execucoes = 0
+        self._trilha = []
+        simulaveis, pend = self._propostas_simulaveis(request.propostas)
+        if not simulaveis:
+            return ProgramaGeradoResponse(
+                origem="TEMPLATE", assinatura=_assinatura(TEMPLATE_CODIGO),
+                pendencias=pend or [pendencia(
+                    CodigoPendencia.CAMPO_AUSENTE, "Nenhuma proposta com taxa ou bônus para simular.")],
+            )
+
+        calculo_adicional, falhou_extracao = self._extrair_calculo_adicional(request.pedido)
+        calculo_adicional = (calculo_adicional or "").strip()
+        regras_sb = [_regra_para_sandbox(b) for b in simulaveis]
+
+        if not calculo_adicional:
+            pend_template = list(pend)
+            premissas = ["Modelo padrão de cálculo (taxa, faixas e bônus por venda); nenhum código foi gerado."]
+            if falhou_extracao:
+                # Não dá pra distinguir "pedido não citou cálculo extra" de "não deu pra consultar o LLM"
+                # sem avisar: o TEMPLATE aqui é um fallback degradado, não uma decisão confirmada.
+                pend_template.append(pendencia(
+                    CodigoPendencia.TOOL_FALHA,
+                    "Não foi possível consultar o LLM para identificar se o pedido exige cálculo adicional; "
+                    "o modelo padrão foi usado como fallback. Revise se o pedido realmente não precisa de código livre.",
+                ))
+            return ProgramaGeradoResponse(
+                origem="TEMPLATE", assinatura=_assinatura(TEMPLATE_CODIGO), premissas=premissas,
+                pendencias=pend_template,
+            )
+
+        gerado, falha = self._gerar_e_sondar(calculo_adicional, simulaveis, regras_sb, [Cenario(nome="sonda")])
+        if falha or gerado is None:
+            assert falha is not None
+            return ProgramaGeradoResponse(
+                origem="CODIGO_LIVRE", assinatura="", pendencias=pend + [pendencia(falha.codigo, falha.mensagem)],
+            )
+        codigo, premissas = gerado
+        return ProgramaGeradoResponse(
+            origem="CODIGO_LIVRE", codigo=codigo, assinatura=_assinatura(codigo), premissas=premissas, pendencias=pend,
+        )
+
     def simular(self, request: SimularRequest) -> SimularResponse:
         self._execucoes = 0
         self._trilha = []
@@ -106,21 +169,49 @@ class ServicoSimulacao:
             return self._resposta_sem_numeros("TEMPLATE", pend or [pendencia(
                 CodigoPendencia.CAMPO_AUSENTE, "Nenhuma proposta com taxa ou bônus para simular.")])
 
-        cenarios, calculo_adicional = self._cenarios(request, observacoes)
-
         dados = self._dados(request)
         if isinstance(dados, _Falha):
             return self._resposta_sem_numeros("TEMPLATE", pend + [pendencia(dados.codigo, dados.mensagem)])
-        vendas_sb, vendas_total = dados
+        vendas_sb, versao_fontes = dados
 
         regras_sb = [_regra_para_sandbox(b) for b in simulaveis]
+
+        if request.codigoAprovado:
+            cenarios = list(request.cenarios) or list(CENARIOS_PADRAO)
+            cen_sb = [{"nome": c.nome, "multiplicadorVendas": str(c.multiplicadorVendas)} for c in cenarios]
+            return self._caminho_aprovado(
+                request.codigoAprovado, request.assinaturaPrograma, simulaveis, regras_sb, vendas_sb, cen_sb,
+                cenarios, observacoes, pend, versao_fontes,
+            )
+
+        cenarios, calculo_adicional = self._cenarios(request, observacoes)
         cen_sb = [{"nome": c.nome, "multiplicadorVendas": str(c.multiplicadorVendas)} for c in cenarios]
 
         if calculo_adicional:
             return self._caminho_livre(
-                calculo_adicional, simulaveis, regras_sb, vendas_sb, cen_sb, cenarios, observacoes, pend
+                calculo_adicional, simulaveis, regras_sb, vendas_sb, cen_sb, cenarios, observacoes, pend, versao_fontes
             )
-        return self._caminho_template(simulaveis, regras_sb, vendas_sb, cen_sb, cenarios, observacoes, pend)
+        return self._caminho_template(
+            simulaveis, regras_sb, vendas_sb, cen_sb, cenarios, observacoes, pend, versao_fontes
+        )
+
+    def _extrair_calculo_adicional(self, pedido: str | None) -> tuple[str | None, bool]:
+        """Mesma extração de `_cenarios`, mas só o texto do cálculo adicional (sem montar cenários).
+
+        Retorna (calculo_adicional, falhou_extracao) — `falhou_extracao=True` quando o LLM não pôde
+        ser consultado (ex.: rate limit), para o chamador não confundir isso com "pedido não pediu nada".
+        """
+        if not pedido or not pedido.strip():
+            return None, False
+        try:
+            bruto = completar_com_retry(self._provider, montar_prompt_cenarios(pedido), CenariosPedido.model_json_schema())
+            extraido = CenariosPedido.model_validate(bruto)
+            return (extraido.calculo_adicional or "").strip() or None, False
+        except LLMAuthenticationError:
+            raise
+        except (LLMBaseException, ValidationError) as exc:
+            logger.warning("Extração de cálculo adicional falhou: %s", exc)
+            return None, True
 
     # ---------------------------------------------------------------- preparação
     def _propostas_simulaveis(self, propostas: list[BlocoProposta]) -> tuple[list[BlocoProposta], list[Pendencia]]:
@@ -164,7 +255,28 @@ class ServicoSimulacao:
             cenarios = cenarios[: settings.sim_max_cenarios]
         return cenarios, calculo_adicional
 
-    def _dados(self, request: SimularRequest) -> tuple[list[dict[str, Any]], int] | _Falha:
+    def _dados(self, request: SimularRequest) -> tuple[list[dict[str, Any]], dict[str, Any]] | _Falha:
+        if request.vendas is not None:
+            return self._dados_do_recorte(request.vendas, request.competencia)
+        return self._dados_via_consulta(request)
+
+    def _dados_do_recorte(
+        self, vendas: list[VendaRecorte], competencia: str
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]] | _Falha:
+        """
+        Recorte enviado pelo backend (BACK-10): fonte ÚNICA de dados — não há busca à base por fora,
+        mesmo que o recorte venha vazio (evita que uma falha silenciosa pareça "sem vendas no período").
+        """
+        self._trilha.append(EvidenciaTool(
+            ferramenta="recorte_backend", argumentos={"competencia": competencia},
+            status="OK" if vendas else "SEM_DADOS", resumo=f"{len(vendas)} venda(s) recebida(s) do backend",
+        ))
+        if not vendas:
+            return _Falha(CodigoPendencia.CAMPO_AUSENTE, "O recorte de vendas enviado pelo backend está vazio.")
+        vendas_sb = [_venda_recorte_para_sandbox(v) for v in vendas]
+        return vendas_sb, {"origemDados": "RECORTE_BACKEND", "competencia": competencia, "qtdVendas": len(vendas_sb)}
+
+    def _dados_via_consulta(self, request: SimularRequest) -> tuple[list[dict[str, Any]], dict[str, Any]] | _Falha:
         tool = self._tools.obter("obter_dados_simulacao")
         if tool is None:
             return _Falha(CodigoPendencia.TOOL_FALHA, "A consulta de dados da simulação não está disponível.")
@@ -181,16 +293,19 @@ class ServicoSimulacao:
         if r.status == "SEM_DADOS" or not r.dados:
             return _Falha(CodigoPendencia.CAMPO_AUSENTE, "Não há vendas na competência informada para simular.")
         vendas = [_venda_para_sandbox(v) for v in r.dados["vendas"]]
-        return vendas, len(vendas)
+        return vendas, {
+            "origemDados": "CONSULTA_AGENTE", "competencia": request.competencia, "qtdVendas": len(vendas),
+        }
 
     # ------------------------------------------------------------------- caminhos
-    def _caminho_template(self, simulaveis, regras_sb, vendas_sb, cen_sb, cenarios, obs, pend) -> SimularResponse:
+    def _caminho_template(self, simulaveis, regras_sb, vendas_sb, cen_sb, cenarios, obs, pend, versao_fontes) -> SimularResponse:
         res = self._executar(TEMPLATE_CODIGO, "TEMPLATE", vendas_sb, regras_sb, cen_sb)
         if not res.ok:
-            return self._resposta_sem_numeros("TEMPLATE", pend + [_pend_execucao(res)])
+            return self._resposta_sem_numeros("TEMPLATE", pend + [_pend_execucao(res)], versao_fontes=versao_fontes)
         resultados, falha = _validar_resultados(res.resultados, cenarios, simulaveis)
         if falha:
-            return self._resposta_sem_numeros("TEMPLATE", pend + [pendencia(falha.codigo, falha.mensagem)])
+            return self._resposta_sem_numeros("TEMPLATE", pend + [pendencia(falha.codigo, falha.mensagem)],
+                                              versao_fontes=versao_fontes)
         obs.append("Simulação por modelo padrão de cálculo (taxa, faixas e bônus por venda).")
         primeiro = res.resultados[0]
         if primeiro.get("vendasSemRegra"):
@@ -199,22 +314,51 @@ class ServicoSimulacao:
             obs.append(f"{primeiro['vendasEmConflito']} venda(s) com propostas empatadas em especificidade "
                        "não foram calculadas (conflito).")
         return SimularResponse(origem="TEMPLATE", resultados=resultados, observacoes=obs, pendencias=pend,
+                               assinaturaPrograma=_assinatura(TEMPLATE_CODIGO), versaoFontes=versao_fontes,
                                trilhaFerramentas=self._trilha)
 
-    def _caminho_livre(self, calculo, simulaveis, regras_sb, vendas_sb, cen_sb, cenarios, obs, pend) -> SimularResponse:
+    def _caminho_livre(self, calculo, simulaveis, regras_sb, vendas_sb, cen_sb, cenarios, obs, pend, versao_fontes) -> SimularResponse:
         gerado, falha = self._gerar_e_sondar(calculo, simulaveis, regras_sb, cenarios)
         if falha or gerado is None:
             assert falha is not None
-            return self._resposta_sem_numeros("CODIGO_LIVRE", pend + [pendencia(falha.codigo, falha.mensagem)])
+            return self._resposta_sem_numeros("CODIGO_LIVRE", pend + [pendencia(falha.codigo, falha.mensagem)],
+                                              versao_fontes=versao_fontes)
         codigo, premissas = gerado
+        return self._executar_codigo_aprovado(
+            codigo, premissas, simulaveis, regras_sb, vendas_sb, cen_sb, cenarios, obs, pend, versao_fontes,
+        )
 
+    def _caminho_aprovado(
+        self, codigo, assinatura_esperada, simulaveis, regras_sb, vendas_sb, cen_sb, cenarios, obs, pend, versao_fontes,
+    ) -> SimularResponse:
+        """IA-2: executa o código já gerado/validado por `gerar_programa`, sem regerá-lo."""
+        assinatura_real = _assinatura(codigo)
+        if assinatura_esperada and assinatura_esperada != assinatura_real:
+            return self._resposta_sem_numeros(
+                "CODIGO_LIVRE",
+                pend + [pendencia(CodigoPendencia.SIMULACAO_NAO_VALIDADA,
+                                  "A assinatura do código aprovado não confere com o código recebido; "
+                                  "nenhum número é exibido.")],
+                codigo, versao_fontes=versao_fontes,
+            )
+        obs.append("Execução do programa previamente gerado e validado (IA-2); não foi reinterpretado.")
+        armazenado = self.buscar_programa(assinatura_real)
+        premissas = armazenado.premissas if armazenado else []
+        return self._executar_codigo_aprovado(
+            codigo, premissas, simulaveis, regras_sb, vendas_sb, cen_sb, cenarios, obs, pend, versao_fontes,
+        )
+
+    def _executar_codigo_aprovado(
+        self, codigo, premissas, simulaveis, regras_sb, vendas_sb, cen_sb, cenarios, obs, pend, versao_fontes,
+    ) -> SimularResponse:
         res = self._executar(codigo, "CODIGO_LIVRE", vendas_sb, regras_sb, cen_sb)
         if not res.ok:
-            return self._resposta_sem_numeros("CODIGO_LIVRE", pend + [_pend_execucao(res)], codigo, premissas)
+            return self._resposta_sem_numeros("CODIGO_LIVRE", pend + [_pend_execucao(res)], codigo, premissas,
+                                              versao_fontes=versao_fontes)
         resultados, falha = _validar_resultados(res.resultados, cenarios, simulaveis)
         if falha:
             return self._resposta_sem_numeros("CODIGO_LIVRE", pend + [pendencia(falha.codigo, falha.mensagem)],
-                                              codigo, premissas)
+                                              codigo, premissas, versao_fontes=versao_fontes)
 
         # teste diferencial interno: o total de vendas não depende da regra e o template o calcula
         ref = self._executar(TEMPLATE_CODIGO, "TEMPLATE", vendas_sb, regras_sb, cen_sb)
@@ -226,10 +370,11 @@ class ServicoSimulacao:
                         pend + [pendencia(CodigoPendencia.SIMULACAO_NAO_VALIDADA,
                                           "O total de vendas calculado pelo código gerado diverge do cálculo "
                                           "de referência; o resultado foi descartado.")],
-                        codigo, premissas)
+                        codigo, premissas, versao_fontes=versao_fontes)
         obs.append("Resultado de código gerado pela IA; revise o código e as premissas antes de usar.")
         return SimularResponse(origem="CODIGO_LIVRE", resultados=resultados, observacoes=obs + premissas,
-                               codigoExecutado=codigo, pendencias=pend, trilhaFerramentas=self._trilha)
+                               codigoExecutado=codigo, assinaturaPrograma=_assinatura(codigo),
+                               versaoFontes=versao_fontes, pendencias=pend, trilhaFerramentas=self._trilha)
 
     # --------------------------------------------------------------- código livre
     def _gerar_e_sondar(
@@ -266,6 +411,7 @@ class ServicoSimulacao:
             if falha:
                 return None, _Falha(CodigoPendencia.SIMULACAO_NAO_VALIDADA,
                                     f"O código gerado não passou na validação de sondagem: {falha.mensagem}")
+            repositorio_codigo.salvar(_assinatura(gerado.codigo), gerado.codigo, gerado.premissas)
             return (gerado.codigo, gerado.premissas), None
         return None, _Falha(CodigoPendencia.SIMULACAO_NAO_VALIDADA, "Não foi possível obter código válido.")
 
@@ -283,12 +429,18 @@ class ServicoSimulacao:
         return res
 
     def _resposta_sem_numeros(self, origem: str, pend: list[Pendencia], codigo: str | None = None,
-                              premissas: list[str] | None = None) -> SimularResponse:
+                              premissas: list[str] | None = None,
+                              versao_fontes: dict[str, Any] | None = None) -> SimularResponse:
         return SimularResponse(origem=origem, resultados=[], pendencias=pend, codigoExecutado=codigo,
-                               observacoes=premissas or [], trilhaFerramentas=self._trilha)
+                               observacoes=premissas or [], versaoFontes=versao_fontes or {},
+                               trilhaFerramentas=self._trilha)
 
 
 # --------------------------------------------------------------------- helpers
+def _assinatura(codigo: str) -> str:
+    return hashlib.sha256(codigo.encode()).hexdigest()
+
+
 def _pend_execucao(res: ResultadoSandbox) -> Pendencia:
     return pendencia(
         CodigoPendencia.SIMULACAO_NAO_VALIDADA,
@@ -306,6 +458,19 @@ def _venda_para_sandbox(v: dict[str, Any]) -> dict[str, Any]:
         "valorVenda": str(v.get("valorVenda", "0")),
         "dataVenda": str(v.get("dataVenda")) if v.get("dataVenda") else None,
         "canal": v.get("canal"),
+    }
+
+
+def _venda_recorte_para_sandbox(v: VendaRecorte) -> dict[str, Any]:
+    return {
+        "id": v.id,
+        "matricula": v.matricula,
+        "codLoja": v.codLoja,
+        "codMarca": v.codMarca,
+        "codCargo": v.codCargo,
+        "valorVenda": str(v.valorVenda),
+        "dataVenda": v.dataVenda.isoformat(),
+        "canal": v.canal,
     }
 
 

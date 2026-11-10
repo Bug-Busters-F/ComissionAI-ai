@@ -13,6 +13,9 @@ env/
 # Variáveis de ambiente
 .env
 
+# Código gerado persistido para revisão (GET /api/v2/programa/{assinatura})
+data/programas_gerados/
+
 # IDEs
 .idea/
 .vscode/
