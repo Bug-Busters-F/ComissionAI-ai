@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     # --- Backend (Spring) consultado pelas tools do agente ---
     backend_base_url: str = "http://localhost:8080"
     tool_timeout_seconds: float = 5.0
+    # Mesma chave usada pelo backend; nunca recebida do navegador.
+    ai_service_api_key: str = ""
+    ai_service_auth_header: str = "X-Internal-Api-Key"
 
     # --- Agente ---
     # Por padrão, só a extração usa o modelo; as consultas têm argumentos conhecidos.
