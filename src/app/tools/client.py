@@ -36,10 +36,15 @@ class BackendClient:
         timeout: float | None = None,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
+        headers = {}
+        if settings.ai_service_api_key:
+            headers[settings.ai_service_auth_header] = settings.ai_service_api_key
         self._client = httpx.Client(
             base_url=(base_url or settings.backend_base_url).rstrip("/"),
             timeout=timeout if timeout is not None else settings.tool_timeout_seconds,
             transport=transport,
+            headers=headers,
+            follow_redirects=False,
         )
 
     def get(self, caminho: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
