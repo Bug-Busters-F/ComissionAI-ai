@@ -269,6 +269,21 @@ class Cenario(BaseModel):
         return value
 
 
+class VendaRecorte(BaseModel):
+    """Uma venda do recorte enviado pelo backend (BACK-10). Mesmo formato de `ESQUEMA_DADOS['vendas']`."""
+
+    id: str
+    matricula: str | None = None
+    codLoja: int | None = None
+    codMarca: int | None = None
+    codCargo: int | None = None
+    valorVenda: Decimal
+    dataVenda: date
+    canal: str | None = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
 class SimularRequest(BaseModel):
     contexto: ContextoProposta = Field(default_factory=ContextoProposta)
     propostas: list[BlocoProposta]
@@ -279,6 +294,52 @@ class SimularRequest(BaseModel):
     )
     cenarios: list[Cenario] = Field(default_factory=list)
     filtro: dict[str, Any] = Field(default_factory=dict)
+    vendas: list[VendaRecorte] | None = Field(
+        default=None,
+        description="Recorte de vendas já resolvido pelo backend (BACK-10). Quando informado, é a ÚNICA "
+        "fonte de dados da simulação — a consulta interna ao backend (ferramenta obter_dados_simulacao) "
+        "não é usada, para não buscar silenciosamente outra base.",
+    )
+    codigoAprovado: str | None = Field(
+        default=None,
+        description="Código já gerado e validado por /gerar-programa (IA-2). Quando informado, a simulação "
+        "executa ESSE código sem regerá-lo — a geração não é reinventada a cada clique em simular.",
+    )
+    assinaturaPrograma: str | None = Field(
+        default=None,
+        description="Assinatura (sha256) de `codigoAprovado`, devolvida por /gerar-programa, para detectar "
+        "divergência entre o que foi aprovado e o que está sendo executado.",
+    )
+
+
+class GerarProgramaRequest(BaseModel):
+    """Gera e valida o programa da simulação ANTES da revisão técnica (IA-2), sem rodar sobre vendas reais."""
+
+    contexto: ContextoProposta = Field(default_factory=ContextoProposta)
+    propostas: list[BlocoProposta]
+    pedido: str | None = Field(
+        default=None,
+        description="Mesmo campo de SimularRequest.pedido: indica se há cálculo adicional (ex.: ajuste "
+        "sobre a base) que exige código livre em vez do template fixo.",
+    )
+
+
+class ProgramaGeradoResponse(BaseModel):
+    origem: Literal["TEMPLATE", "CODIGO_LIVRE"]
+    codigo: str | None = Field(
+        default=None, description="None quando origem=TEMPLATE (código fixo, não versionado por chamada)."
+    )
+    assinatura: str = Field(description="sha256 do código (fixo ou gerado); identifica a versão aprovada.")
+    premissas: list[str] = Field(default_factory=list)
+    pendencias: list[Pendencia] = Field(default_factory=list)
+
+
+class ProgramaArmazenado(BaseModel):
+    """Resposta de GET /api/v2/programa/{assinatura}: código recuperado pra revisão posterior."""
+
+    assinatura: str
+    codigo: str
+    premissas: list[str] = Field(default_factory=list)
 
 
 class ResultadoCenario(BaseModel):
@@ -296,5 +357,13 @@ class SimularResponse(BaseModel):
     resultados: list[ResultadoCenario] = Field(default_factory=list)
     observacoes: list[str] = Field(default_factory=list)
     codigoExecutado: str | None = None
+    assinaturaPrograma: str | None = Field(
+        default=None, description="sha256 do código executado (TEMPLATE fixo ou código livre aprovado)."
+    )
+    versaoFontes: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Rastreabilidade das fontes usadas: origem dos dados (RECORTE_BACKEND|CONSULTA_AGENTE), "
+        "competência e quantidade de vendas.",
+    )
     pendencias: list[Pendencia] = Field(default_factory=list)
     trilhaFerramentas: list[EvidenciaTool] = Field(default_factory=list)

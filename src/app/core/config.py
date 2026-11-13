@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     sim_max_cenarios: int = 5
     sim_max_code_lines: int = 150
     sim_max_code_bytes: int = 8192
+    sim_dir_programas: str = "data/programas_gerados"
 
     # --- API ---
     app_host: str = "0.0.0.0"

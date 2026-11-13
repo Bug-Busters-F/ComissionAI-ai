@@ -107,6 +107,18 @@ class TestBloqueioEmExecucao(unittest.TestCase):
         self.assertTrue(r.ok, r.detalhe)
         self.assertEqual(r.resultados[0]["t"], "100.00")
 
+    def test_datetime_strptime_nao_e_bloqueado(self):
+        """Achado testando com LLM real: datetime.strptime() faz um import lazy interno de
+        `_strptime`; sem isso na lista de permissão, código gerado legítimo (parsing de data
+        com formato) quebrava com ERRO_CODIGO/ImportError, indistinguível de um ataque."""
+        r = rodar(corpo(
+            "from datetime import datetime",
+            "d = datetime.strptime(vendas[0].get('dataVenda', '2026-01-01'), '%Y-%m-%d')",
+            "return {'ano': d.year}",
+        ))
+        self.assertTrue(r.ok, r.detalhe)
+        self.assertEqual(r.resultados[0]["ano"], 2026)
+
     def test_timeout_laco_longo(self):
         with patch.object(settings, "sim_max_seconds", 1.0):
             r = rodar(corpo("n = 0", "while n < 10**12:", "    n += 1", "return {'n': n}"))

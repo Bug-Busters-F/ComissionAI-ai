@@ -14,7 +14,9 @@ Documento para o time do Spring. Fonte da verdade: `src/app/schemas/proposta.py`
 | Rota | Função | Situação |
 |---|---|---|
 | `POST /api/v2/interpretar` | Pedido em linguagem natural → lista de propostas (agente com ferramentas) | Implementada (IA-1/2/3/4) |
-| `POST /api/v2/simular` | Propostas → simulação em sandbox (template ou código livre) | Implementada (requisito do cliente) |
+| `POST /api/v2/gerar-programa` | Propostas (+ pedido) → gera e valida o programa da simulação **antes** da revisão técnica, devolvendo uma assinatura | Implementada (Sprint 3, IA-2) |
+| `GET /api/v2/programa/{assinatura}` | Recupera o código (fixo ou gerado) de uma assinatura, para revisão posterior | Implementada (Sprint 3, IA-2) |
+| `POST /api/v2/simular` | Propostas → simulação em sandbox (template ou código livre); aceita o programa já aprovado e o recorte de vendas do backend | Implementada (requisito do cliente; ampliada na Sprint 3 — IA-2/IA-3) |
 | `POST /api/v2/reinterpretar` | Texto alterado de uma regra → proposta(s) de substituição | Implementada (IA-6) |
 | `POST /api/v2/atualizar-artefatos` | Campos editados → explicação/código atualizados | Implementada (IA-6/IA-7) |
 
@@ -136,6 +138,50 @@ Entrada: `bloco` (campos atuais), `camposEditados`, `origemCampos` (`MANUAL`/`IA
 - Taxa `MANUAL`: `operacao` vira `TAXA_ABSOLUTA` com o novo valor, a referência `BASE_COMISS` sai e as pendências de
   `taxa` são substituídas; a explicação informa "definida manualmente pelo gestor (origem: MANUAL)".
 
+## `POST /api/v2/gerar-programa` (Sprint 3, IA-2)
+
+Gera e valida o código da simulação **ANTES** de existir qualquer venda real — serve pra revisão técnica
+aprovar o programa de uma vez, sem que `/simular` precise reinventá-lo a cada clique.
+
+```json
+{
+  "propostas": [ /* BlocoProposta do interpretar, com taxa e/ou bonus */ ],
+  "pedido": "faça um ranking de comissão por matrícula, do maior para o menor"
+}
+```
+
+Resposta:
+
+```json
+{
+  "origem": "CODIGO_LIVRE",
+  "codigo": "def simular(vendas, regras, cenario):\n    ...",
+  "assinatura": "2f1e...a9",
+  "premissas": ["1% fixo sobre o excedente da meta"],
+  "pendencias": []
+}
+```
+
+| Campo | Observação |
+|---|---|
+| `origem` | `TEMPLATE` (sem `pedido`, ou pedido que não exige cálculo extra) ou `CODIGO_LIVRE` (precisa de código gerado). |
+| `codigo` | `null` quando `origem=TEMPLATE` (o template é fixo, não é versionado por chamada). |
+| `assinatura` | sha256 do código (fixo ou gerado). É o identificador da versão aprovada — ver `/simular` e `GET /programa`. |
+| `premissas` | O que o código assume, pra quem revisa entender o que está sendo calculado antes de aprovar. |
+| `pendencias` | `CAMPO_AUSENTE` (nenhuma proposta simulável), `TOOL_FALHA` (LLM indisponível — nesse caso vira `TEMPLATE` **com a pendência avisando**, nunca decide silenciosamente que "não precisava de código"), `SIMULACAO_NAO_VALIDADA` (código rejeitado na análise estática ou na sondagem — `codigo=null`, nada foi aprovado). |
+
+A geração roda uma sondagem (execução de prova sobre uma amostra sintética) e tem **uma regeração automática**,
+só quando a análise estática rejeita o código (a LLM recebe o motivo da rejeição e corrige); falhas em
+runtime (erro do código, violação de sandbox, timeout etc.) não tentam de novo — vão direto pra
+`SIMULACAO_NAO_VALIDADA`.
+
+## `GET /api/v2/programa/{assinatura}` (Sprint 3, IA-2)
+
+Recupera o código de uma assinatura já gerada, pra reabrir e revisar depois sem precisar gerar de novo.
+`200` com `{assinatura, codigo, premissas}`; `404` se a assinatura não existir. O `TEMPLATE` é sempre
+recuperável (é fixo), mesmo sem nunca ter passado por `/gerar-programa`. O backend só precisa guardar a
+`assinatura` como referência — o código fica persistido aqui, no serviço de IA.
+
 ## `POST /api/v2/simular`
 ```json
 {
@@ -143,7 +189,13 @@ Entrada: `bloco` (campos atuais), `camposEditados`, `origemCampos` (`MANUAL`/`IA
   "competencia": "2026-12",
   "pedido": "e se as vendas crescerem 20%?",
   "cenarios": [],
-  "filtro": {"loja": 75}
+  "filtro": {"loja": 75},
+  "vendas": [
+    {"id": "v1", "matricula": "M1", "codLoja": 75, "codMarca": 10, "codCargo": 100,
+     "valorVenda": "1000.00", "dataVenda": "2026-12-10", "canal": null}
+  ],
+  "codigoAprovado": "def simular(vendas, regras, cenario):\n    ...",
+  "assinaturaPrograma": "2f1e...a9"
 }
 ```
 - Sem `cenarios` e sem `pedido`: usa 80%, 100% e 120% das vendas. Com `pedido`, o agente monta os cenários.
@@ -156,6 +208,37 @@ Entrada: `bloco` (campos atuais), `camposEditados`, `origemCampos` (`MANUAL`/`IA
   conflito, não calculada), `comissão = valor×taxa + valor×bônus% + bônus fixo`, cada parcela `HALF_UP` escala 2.
   Garantido pelos **casos de ouro** compartilhados (`tests/golden/golden_cases.json`).
 - Vendas sem proposta aplicável ficam fora (a base de comissão não entra na simulação de propostas).
+
+### `codigoAprovado` / `assinaturaPrograma` (Sprint 3, IA-2)
+Quando informados (normalmente vindos de `/gerar-programa`), a simulação **executa exatamente esse código**,
+sem chamar a LLM de novo. O serviço recalcula o sha256 do `codigoAprovado` recebido e compara com
+`assinaturaPrograma`; se não bater, a execução é bloqueada (`resultados=[]`, pendência citando a divergência) —
+o backend não pode mandar um código diferente do que foi aprovado e dizer que é o mesmo. A resposta sempre
+devolve `assinaturaPrograma` com o sha256 do que foi de fato executado (template fixo ou código aprovado).
+
+### `vendas` — recorte do backend (Sprint 3, IA-3)
+> ⚠️ **Suposição não confirmada com o backend.** `BACK-10` (quem resolve e envia esse recorte) ainda não existe
+> no `ComissionAI-backend` nesta sprint. O formato de `VendaRecorte` abaixo é o que o serviço de IA espera —
+> **precisa ser validado/ajustado com quem implementar BACK-10** antes de considerar este contrato fechado.
+
+Quando `vendas` é informado, ele é a **ÚNICA** fonte de dados da simulação: a ferramenta de consulta interna
+(`obter_dados_simulacao`) não é usada, pra não buscar silenciosamente outra base caso o recorte enviado esteja
+errado ou incompleto. `vendas: []` (lista vazia, não ausente) é tratado como falha explícita — pendência
+avisando que o recorte está vazio, não um motivo pra consultar outro lugar.
+
+```json
+{"id": "v1", "matricula": "M1", "codLoja": 75, "codMarca": 10, "codCargo": 100,
+ "valorVenda": "1000.00", "dataVenda": "2026-12-10", "canal": null}
+```
+Campos opcionais (`matricula`, `codLoja`, `codMarca`, `codCargo`, `canal`) podem vir `null`; `id`, `valorVenda`
+e `dataVenda` são obrigatórios. Quando **ausente** (não enviado no corpo), o comportamento anterior é mantido:
+o serviço consulta `obter_dados_simulacao` no backend (modo antigo, pré-BACK-10).
+
+A resposta sempre devolve `versaoFontes`, indicando de onde vieram os dados usados:
+```json
+{"origemDados": "RECORTE_BACKEND", "competencia": "2026-12", "qtdVendas": 2}
+```
+`origemDados` é `RECORTE_BACKEND` (veio de `vendas`) ou `CONSULTA_AGENTE` (veio da consulta interna).
 
 ## Consultas ao backend (usadas pelas tools)
 `GET /api/v1/consultas-ia/{marcas|lojas|cargos}`, `/matriculas/{m}`, `/bases`, `POST /regras-concorrentes`,
