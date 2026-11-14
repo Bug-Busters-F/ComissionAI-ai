@@ -382,6 +382,11 @@ class SimularRequest(BaseModel):
     pendenciasAceitas: list[PendenciaAceita] = Field(
         default_factory=list, description="Pendências aceitas com ressalva (BACK-7), devolvidas como riscos."
     )
+    calibrar: bool = Field(
+        default=False,
+        description="IA-6: para cada cenário acima do orçamento, buscar uma alternativa de parâmetros verificada "
+        "por reexecução. Exige `orcamento`.",
+    )
 
     @field_validator("orcamento")
     @classmethod
@@ -498,6 +503,41 @@ class ResumoOrcamento(BaseModel):
     motivoBloqueioEncaminhamento: str | None = None
 
 
+class AlteracaoParametro(BaseModel):
+    """Parâmetro de regra alterado por uma alternativa de calibração (para o usuário aplicar ao rascunho)."""
+
+    idLocal: str
+    campo: Literal["taxa", "bonus.percentual", "bonus.valorFixo"]
+    antes: Decimal
+    depois: Decimal
+
+
+StatusCalibracao = Literal["ENQUADRADA", "SEM_SOLUCAO_VIAVEL", "NAO_NECESSARIA", "FALHA"]
+
+
+class Calibracao(BaseModel):
+    """Alternativa de ajuste para UM cenário (IA-6). Independente das alternativas dos outros cenários."""
+
+    cenario: str
+    multiplicadorVendas: Decimal
+    status: StatusCalibracao
+    orcamento: Decimal
+    custoProjetadoOriginal: Decimal | None = None
+    custoProjetadoRecalculado: Decimal | None = Field(
+        default=None, description="Custo projetado obtido REEXECUTANDO o programa com os parâmetros alterados."
+    )
+    custoPropostoRecalculado: Decimal | None = None
+    folga: Decimal | None = Field(default=None, description="Orçamento − custo projetado recalculado.")
+    custoProjetadoMinimo: Decimal | None = Field(
+        default=None, description="Custo com os parâmetros no mínimo (só em SEM_SOLUCAO_VIAVEL)."
+    )
+    fatorAjuste: Decimal | None = Field(default=None, description="Fator aplicado a taxas e bônus (0 < λ ≤ 1).")
+    alteracoes: list[AlteracaoParametro] = Field(default_factory=list)
+    tentativas: int = Field(description="Reexecuções do programa usadas nesta busca.")
+    assinaturaPrograma: str
+    motivo: str | None = None
+
+
 class SimularResponse(BaseModel):
     origem: Literal["TEMPLATE", "CODIGO_LIVRE"]
     simulacao: Literal["SIMULACAO_SANDBOX"] = "SIMULACAO_SANDBOX"
@@ -518,5 +558,10 @@ class SimularResponse(BaseModel):
     )
     exclusoes: list[ItemExclusao] = Field(default_factory=list)
     riscos: list[str] = Field(default_factory=list, description="Ressalvas que acompanham os números (ex.: pendências aceitas).")
+    calibracoes: list[Calibracao] = Field(default_factory=list, description="IA-6: uma entrada por cenário.")
+    statusSugestoes: Literal["OK", "FALHA", "NAO_SOLICITADA"] = Field(
+        default="NAO_SOLICITADA",
+        description="FALHA = ao menos um cenário não pôde ser calibrado; nenhuma alternativa foi inventada para ele.",
+    )
     pendencias: list[Pendencia] = Field(default_factory=list)
     trilhaFerramentas: list[EvidenciaTool] = Field(default_factory=list)

@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     sim_max_code_bytes: int = 8192
     sim_dir_programas: str = "data/programas_gerados"
 
+    # --- Calibração (IA-6): reexecuções por cenário e tempo total da requisição ---
+    # O tempo total precisa caber no read-timeout do backend (AI_READ_TIMEOUT, 60 s) junto com a simulação.
+    calib_max_tentativas: int = Field(default=12, ge=2, le=30)
+    calib_max_segundos: float = Field(default=20.0, gt=0, le=120)
+
     # --- API ---
     app_host: str = "0.0.0.0"
     app_port: int = 8000

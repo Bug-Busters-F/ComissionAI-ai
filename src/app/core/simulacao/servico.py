@@ -31,6 +31,7 @@ from app.core.prompts.simulacao_prompt import (
     montar_prompt_codigo,
 )
 from app.core.simulacao import repositorio_codigo
+from app.core.simulacao.calibracao import Avaliacao, Calibrador
 from app.core.simulacao.cenarios import (
     CENARIOS_PADRAO,
     CHAVE_CONTRATUAL,
@@ -44,6 +45,7 @@ from app.core.simulacao.templates import TEMPLATE_CODIGO
 from app.providers.base import LLMProvider
 from app.schemas.proposta import (
     BlocoProposta,
+    Calibracao,
     Cenario,
     CodigoPendencia,
     EvidenciaTool,
@@ -103,6 +105,8 @@ class _Contexto:
     orcamento: Decimal | None
     periodo: PeriodoCampanha | None
     pendencias_aceitas: list[PendenciaAceita]
+    simulaveis: list[BlocoProposta]
+    calibrar: bool
 
 
 class ServicoSimulacao:
@@ -202,7 +206,7 @@ class ServicoSimulacao:
                 CodigoPendencia.CAMPO_AUSENTE,
                 "Nenhuma venda calculável pertence ao público das regras da proposta.")], versao_fontes=versao_fontes)
         self._ctx = _Contexto(request.competencia, populacao, request.orcamento, request.periodoCampanha,
-                              list(request.pendenciasAceitas))
+                              list(request.pendenciasAceitas), simulaveis, request.calibrar)
         if not populacao.modo_contratual:
             observacoes.append("Taxas contratuais não informadas: custo contratual e fallback contratual não "
                                "foram calculados.")
@@ -479,10 +483,43 @@ class ServicoSimulacao:
             return self._resposta_sem_numeros(
                 origem, pend + [pendencia(CodigoPendencia.SIMULACAO_NAO_VALIDADA, f"Resultado inválido: {c.erro}")],
                 codigo, versao_fontes=versao_fontes)
+        calibracoes, status_sugestoes = self._calibrar(ctx, c.resultados, cenarios, codigo, assinatura, pend)
         return SimularResponse(origem=origem, resultados=c.resultados, observacoes=obs, pendencias=pend,
                                codigoExecutado=codigo, assinaturaPrograma=assinatura, versaoFontes=versao_fontes,
                                orcamento=c.resumo, exclusoes=c.exclusoes, riscos=riscos(ctx.pendencias_aceitas),
+                               calibracoes=calibracoes, statusSugestoes=status_sugestoes,
                                trilhaFerramentas=self._trilha)
+
+    def _calibrar(self, ctx: _Contexto, resultados: list[ResultadoCenario], cenarios: list[Cenario],
+                  codigo: str | None, assinatura: str, pend: list[Pendencia]) -> tuple[list[Calibracao], str]:
+        """IA-6: uma alternativa por cenário, sempre reexecutando o MESMO programa da simulação."""
+        if not ctx.calibrar:
+            return [], "NAO_SOLICITADA"
+        if ctx.orcamento is None:
+            pend.append(pendencia(CodigoPendencia.CAMPO_AUSENTE,
+                                  "A calibração exige o orçamento da campanha; nenhuma sugestão foi gerada.",
+                                  "orcamento"))
+            return [], "FALHA"
+        codigo_exec = codigo if codigo is not None else TEMPLATE_CODIGO
+
+        def avaliar(blocos: list[BlocoProposta], cen: Cenario) -> Avaliacao:
+            regras = [_regra_para_sandbox(b, com_vigencia=False) for b in blocos]
+            cen_sb = [{"nome": cen.nome, "multiplicadorVendas": str(cen.multiplicadorVendas)}]
+            res = self._executar(codigo_exec, "CALIBRACAO", ctx.populacao.vendas, regras, cen_sb)
+            if not res.ok:
+                return Avaliacao(None, f"{res.erro}: {res.detalhe}")
+            validos, falha = _validar_resultados(res.resultados, [cen], blocos)
+            if falha:
+                return Avaliacao(None, falha.mensagem)
+            cons = consolidar(validos, res.resultados, [cen], ctx.populacao, ctx.orcamento, ctx.periodo,
+                              ctx.competencia)
+            return Avaliacao(None, cons.erro) if cons.erro else Avaliacao(cons.resultados[0])
+
+        calibrador = Calibrador(avaliar, settings.calib_max_tentativas, settings.calib_max_segundos)
+        assert ctx.orcamento is not None
+        calibracoes = [calibrador.calibrar(ctx.simulaveis, r, cen, ctx.orcamento, assinatura)
+                       for r, cen in zip(resultados, cenarios)]
+        return calibracoes, ("FALHA" if any(c.status == "FALHA" for c in calibracoes) else "OK")
 
     def _resposta_sem_numeros(self, origem: str, pend: list[Pendencia], codigo: str | None = None,
                               premissas: list[str] | None = None,
