@@ -49,6 +49,9 @@ class ContextoProposta(BaseModel):
     revisao: int | None = None
     origem: Literal["NOVA", "VERSAO_EXISTENTE"] = "NOVA"
     substituiVersao: str | None = None
+    execucaoId: str | None = Field(
+        default=None, description="Id da execução no backend; devolvido em cada explicação (IA-7)."
+    )
 
     model_config = ConfigDict(extra="ignore")
 
@@ -538,6 +541,28 @@ class Calibracao(BaseModel):
     motivo: str | None = None
 
 
+TipoExplicacao = Literal[
+    "SEM_ORCAMENTO", "DENTRO_DO_ORCAMENTO", "ACIMA_DO_ORCAMENTO",
+    "SUGESTAO_VALIDADA", "SEM_SOLUCAO_VIAVEL", "SUGESTAO_INDISPONIVEL",
+]
+
+
+class ExplicacaoCenario(BaseModel):
+    """
+    Explicação determinística de UM cenário (IA-7). Todo número citado em `resumo`/`limitacoes` está em
+    `numeros` com o valor exato devolvido pela simulação/calibração; o texto nunca altera números.
+    """
+
+    execucaoId: str | None = None
+    assinaturaPrograma: str | None = None
+    cenario: str
+    multiplicadorVendas: Decimal
+    tipo: TipoExplicacao
+    resumo: str
+    numeros: dict[str, Decimal] = Field(default_factory=dict)
+    limitacoes: list[str] = Field(default_factory=list)
+
+
 class SimularResponse(BaseModel):
     origem: Literal["TEMPLATE", "CODIGO_LIVRE"]
     simulacao: Literal["SIMULACAO_SANDBOX"] = "SIMULACAO_SANDBOX"
@@ -562,6 +587,9 @@ class SimularResponse(BaseModel):
     statusSugestoes: Literal["OK", "FALHA", "NAO_SOLICITADA"] = Field(
         default="NAO_SOLICITADA",
         description="FALHA = ao menos um cenário não pôde ser calibrado; nenhuma alternativa foi inventada para ele.",
+    )
+    explicacoes: list[ExplicacaoCenario] = Field(
+        default_factory=list, description="IA-7: uma explicação por cenário com números, sem LLM."
     )
     pendencias: list[Pendencia] = Field(default_factory=list)
     trilhaFerramentas: list[EvidenciaTool] = Field(default_factory=list)

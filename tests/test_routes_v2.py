@@ -46,7 +46,8 @@ class TestRotasV2(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         corpo = r.json()
         self.assertEqual(len(corpo["propostas"]), 1)
-        self.assertEqual(corpo["contexto"], {"campanhaId": "c1", "revisao": 3, "origem": "NOVA", "substituiVersao": None})
+        self.assertEqual(corpo["contexto"], {"campanhaId": "c1", "revisao": 3, "origem": "NOVA", "substituiVersao": None,
+                                            "execucaoId": None})
         self.assertEqual(corpo["propostas"][0]["taxa"], "0.0300")
         self.assertEqual(corpo["propostas"][0]["origem"]["trecho"], "3% para vendedores")
         self.assertIsNotNone(corpo["propostas"][0]["explicacao"])  # IA-7 implementado

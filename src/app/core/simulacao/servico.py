@@ -40,6 +40,7 @@ from app.core.simulacao.cenarios import (
     preparar_populacao,
     riscos,
 )
+from app.core.simulacao.explicacoes import gerar_explicacoes
 from app.core.simulacao.sandbox import ResultadoSandbox, Sandbox
 from app.core.simulacao.templates import TEMPLATE_CODIGO
 from app.providers.base import LLMProvider
@@ -107,6 +108,7 @@ class _Contexto:
     pendencias_aceitas: list[PendenciaAceita]
     simulaveis: list[BlocoProposta]
     calibrar: bool
+    execucao_id: str | None = None
 
 
 class ServicoSimulacao:
@@ -206,7 +208,8 @@ class ServicoSimulacao:
                 CodigoPendencia.CAMPO_AUSENTE,
                 "Nenhuma venda calculável pertence ao público das regras da proposta.")], versao_fontes=versao_fontes)
         self._ctx = _Contexto(request.competencia, populacao, request.orcamento, request.periodoCampanha,
-                              list(request.pendenciasAceitas), simulaveis, request.calibrar)
+                              list(request.pendenciasAceitas), simulaveis, request.calibrar,
+                              request.contexto.execucaoId)
         if not populacao.modo_contratual:
             observacoes.append("Taxas contratuais não informadas: custo contratual e fallback contratual não "
                                "foram calculados.")
@@ -484,10 +487,13 @@ class ServicoSimulacao:
                 origem, pend + [pendencia(CodigoPendencia.SIMULACAO_NAO_VALIDADA, f"Resultado inválido: {c.erro}")],
                 codigo, versao_fontes=versao_fontes)
         calibracoes, status_sugestoes = self._calibrar(ctx, c.resultados, cenarios, codigo, assinatura, pend)
+        lista_riscos = riscos(ctx.pendencias_aceitas)
+        explicacoes = gerar_explicacoes(c.resultados, calibracoes, c.resumo, c.exclusoes, lista_riscos, assinatura,
+                                        ctx.execucao_id)
         return SimularResponse(origem=origem, resultados=c.resultados, observacoes=obs, pendencias=pend,
                                codigoExecutado=codigo, assinaturaPrograma=assinatura, versaoFontes=versao_fontes,
-                               orcamento=c.resumo, exclusoes=c.exclusoes, riscos=riscos(ctx.pendencias_aceitas),
-                               calibracoes=calibracoes, statusSugestoes=status_sugestoes,
+                               orcamento=c.resumo, exclusoes=c.exclusoes, riscos=lista_riscos,
+                               calibracoes=calibracoes, statusSugestoes=status_sugestoes, explicacoes=explicacoes,
                                trilhaFerramentas=self._trilha)
 
     def _calibrar(self, ctx: _Contexto, resultados: list[ResultadoCenario], cenarios: list[Cenario],
