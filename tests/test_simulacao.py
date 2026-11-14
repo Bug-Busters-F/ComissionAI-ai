@@ -71,7 +71,7 @@ class TestTemplate(unittest.TestCase):
         self.assertEqual(r.origem, "TEMPLATE")
         self.assertEqual(r.simulacao, "SIMULACAO_SANDBOX")
         self.assertIn("Não substitui a apuração", r.aviso)
-        self.assertEqual([x.cenario for x in r.resultados], ["Vendas 80%", "Vendas 100%", "Vendas 120%"])
+        self.assertEqual([x.cenario for x in r.resultados], ["Vendas 80%", "Vendas 100%", "Vendas 120%", "Vendas 150%"])
         base = r.resultados[1]
         # a: 1000 -> faixa <10000 -> 2% = 20.00 ; b: 20000 -> 3% = 600 + 1% = 200 + 50 fixo = 850.00
         self.assertEqual(base.porBloco, {"p1": Decimal("20.00"), "p2": Decimal("850.00")})
@@ -130,7 +130,7 @@ class TestTemplate(unittest.TestCase):
         import app.core.llm_retry as lr
         lr.RETRY_BACKOFF_SECONDS = 0
         r = ServicoSimulacao(provider, registry()).simular(req([bloco("p1", "0.02", codLoja=75)], pedido="simule"))
-        self.assertEqual(len(r.resultados), 3)
+        self.assertEqual(len(r.resultados), 4)
 
     def test_erro_de_auth_propaga(self):
         with self.assertRaises(LLMAuthenticationError):
@@ -227,7 +227,7 @@ class TestRotaSimular(unittest.TestCase):
         j = r.json()
         self.assertEqual(j["simulacao"], "SIMULACAO_SANDBOX")
         self.assertEqual(j["origem"], "TEMPLATE")
-        self.assertEqual(len(j["resultados"]), 3)
+        self.assertEqual(len(j["resultados"]), 4)
 
     def test_competencia_invalida(self):
         r = TestClient(app).post("/api/v2/simular", json={"competencia": "dez/2026", "propostas": []})

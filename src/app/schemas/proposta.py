@@ -12,7 +12,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class CodigoPendencia(str, Enum):
@@ -277,9 +277,64 @@ class VendaRecorte(BaseModel):
     codLoja: int | None = None
     codMarca: int | None = None
     codCargo: int | None = None
+    descriCargo: str | None = Field(
+        default=None,
+        description="Descrição do cargo no RH. Distingue cargos com o mesmo código e taxas diferentes "
+        "(ex.: 150 = GERENTE DE LOJA ou GERENTE QUIOSQUE) ao resolver a taxa contratual.",
+    )
     valorVenda: Decimal
     dataVenda: date
     canal: str | None = None
+    taxaContratual: Decimal | None = Field(
+        default=None,
+        description="Taxa contratual já resolvida pelo backend para esta venda (opcional). Quando ausente, "
+        "é resolvida a partir de `taxasContratuais` da requisição.",
+    )
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class TaxaContratual(BaseModel):
+    """Taxa do BASE_COMMISS por marca e cargo (BACK-10: `taxasContratuais`)."""
+
+    codMarca: int
+    codCargo: int
+    descriCargo: str | None = None
+    taxa: Decimal = Field(validation_alias=AliasChoices("taxa", "percentual"))
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    @field_validator("taxa")
+    @classmethod
+    def _taxa_valida(cls, value: Decimal) -> Decimal:
+        if not (Decimal("0") <= value <= Decimal("1")):
+            raise ValueError("A taxa contratual deve estar entre 0 e 1.")
+        return value
+
+
+class PeriodoCampanha(BaseModel):
+    """Vigência da campanha usada na projeção do custo (dias inclusivos ÷ 30, como no backend)."""
+
+    dataInicio: date
+    dataFim: date
+
+    @model_validator(mode="after")
+    def _validar(self) -> "PeriodoCampanha":
+        if self.dataFim < self.dataInicio:
+            raise ValueError("A data final da campanha não pode ser anterior à inicial.")
+        return self
+
+
+class PendenciaAceita(BaseModel):
+    """Pendência de base aceita com ressalva (BACK-7), listada como risco da simulação."""
+
+    tipoBase: str | None = None
+    competencia: str | None = None
+    linha: int | None = None
+    campo: str | None = None
+    motivo: str | None = None
+    aceitaPor: str | None = None
+    motivoAceite: str | None = None
 
     model_config = ConfigDict(extra="ignore")
 
@@ -310,6 +365,30 @@ class SimularRequest(BaseModel):
         description="Assinatura (sha256) de `codigoAprovado`, devolvida por /gerar-programa, para detectar "
         "divergência entre o que foi aprovado e o que está sendo executado.",
     )
+    orcamento: Decimal | None = Field(
+        default=None,
+        description="Teto orçamentário confirmado da campanha (BACK-8). Comparado ao custo projetado de cada "
+        "cenário; o cenário de 100% define o enquadramento para encaminhamento ao gerente.",
+    )
+    periodoCampanha: PeriodoCampanha | None = Field(
+        default=None,
+        description="Vigência da campanha para a projeção. Ausente: mês inteiro da competência (igual ao backend).",
+    )
+    taxasContratuais: list[TaxaContratual] = Field(
+        default_factory=list,
+        description="Taxas do BASE_COMMISS (BACK-10). Habilitam o custo contratual e o fallback contratual das "
+        "vendas do público que nenhuma regra da proposta alcança.",
+    )
+    pendenciasAceitas: list[PendenciaAceita] = Field(
+        default_factory=list, description="Pendências aceitas com ressalva (BACK-7), devolvidas como riscos."
+    )
+
+    @field_validator("orcamento")
+    @classmethod
+    def _orcamento_positivo(cls, value: Decimal | None) -> Decimal | None:
+        if value is not None and value <= 0:
+            raise ValueError("O orçamento deve ser positivo.")
+        return value
 
 
 class GerarProgramaRequest(BaseModel):
@@ -342,12 +421,81 @@ class ProgramaArmazenado(BaseModel):
     premissas: list[str] = Field(default_factory=list)
 
 
+SituacaoEnquadramento = Literal["ENQUADRADO", "ACIMA_DO_TETO", "NAO_APLICAVEL"]
+
+
+class EnquadramentoCenario(BaseModel):
+    """Mesmos nomes de `EnquadramentoOrcamentoCenarioDTO` do backend (BACK-8)."""
+
+    cenario: str
+    multiplicadorVolume: Decimal
+    totalVendasEscopo: int
+    orcamentoTeto: Decimal | None = None
+    custoTotalProjetado: Decimal
+    deltaProjetado: Decimal | None = None
+    statusEnquadramento: SituacaoEnquadramento
+    dentroDoOrcamento: bool | None = None
+    saldoOrcamento: Decimal | None = None
+    excedenteOrcamento: Decimal | None = None
+    percentualUsoOrcamento: Decimal | None = None
+
+
 class ResultadoCenario(BaseModel):
     cenario: str
     totalVendas: Decimal
-    totalComissao: Decimal
-    porBloco: dict[str, Decimal] = Field(default_factory=dict)
+    totalComissao: Decimal = Field(description="Custo proposto: comissão da proposta (com fallback contratual).")
+    porBloco: dict[str, Decimal] = Field(
+        default_factory=dict,
+        description="Comissão por regra (idLocal). `BASE_CONTRATUAL` agrupa as vendas do público sem regra aplicável.",
+    )
     porMatricula: dict[str, Decimal] = Field(default_factory=dict)
+    # IA-5: comparação contratual x proposta, projeção e orçamento (ausentes quando não calculáveis)
+    multiplicadorVendas: Decimal | None = None
+    custoContratual: Decimal | None = Field(
+        default=None, description="Comissão pelas taxas do BASE_COMMISS sobre as mesmas vendas (referência)."
+    )
+    diferenca: Decimal | None = Field(default=None, description="Custo proposto − custo contratual.")
+    diferencaPercentual: Decimal | None = None
+    fatorProjecao: Decimal | None = None
+    custoProjetado: Decimal | None = Field(
+        default=None, description="Custo proposto × fator de projeção (dias da campanha ÷ 30)."
+    )
+    deltaProjetado: Decimal | None = None
+    qtdVendas: int | None = None
+    qtdRegraAplicada: int | None = None
+    qtdFallbackContratual: int | None = None
+    qtdMudancaFaixa: int | None = Field(
+        default=None, description="Vendas cuja regra (ou fallback) muda em relação ao cenário de 100%."
+    )
+    qtdConflito: int | None = None
+    enquadramento: EnquadramentoCenario | None = None
+
+
+class ItemExclusao(BaseModel):
+    """Vendas fora do cálculo, sempre explícitas (nunca viram zero silenciosamente)."""
+
+    codigo: Literal["FORA_DO_PUBLICO", "SEM_TAXA_CONTRATUAL", "TAXA_CONTRATUAL_AMBIGUA", "CONFLITO_REGRAS"]
+    motivo: str
+    quantidade: int
+    valorVendas: Decimal | None = Field(default=None, description="Soma do valor original dessas vendas.")
+    vendaIds: list[str] = Field(default_factory=list, description="Até 50 identificadores, para conferência.")
+    impedeEncaminhamento: bool = False
+
+
+class ResumoOrcamento(BaseModel):
+    """Consolidado do enquadramento nos cenários (mesmos nomes de `ResumoEnquadramentoOrcamentoDTO`)."""
+
+    orcamentoCampanha: Decimal | None = None
+    diasInclusivos: int
+    fatorProjecao: Decimal
+    totalVendasEscopoComum: int
+    escopoConsistenteQuatroCenarios: bool
+    statusCenario100: SituacaoEnquadramento
+    valorEncaminhamento: Decimal | None = Field(
+        default=None, description="Custo projetado do cenário de 100%: valor usado por BACK-4 para a aprovação."
+    )
+    aptoEncaminhamentoGerente: bool
+    motivoBloqueioEncaminhamento: str | None = None
 
 
 class SimularResponse(BaseModel):
@@ -365,5 +513,10 @@ class SimularResponse(BaseModel):
         description="Rastreabilidade das fontes usadas: origem dos dados (RECORTE_BACKEND|CONSULTA_AGENTE), "
         "competência e quantidade de vendas.",
     )
+    orcamento: ResumoOrcamento | None = Field(
+        default=None, description="Enquadramento orçamentário consolidado (IA-5). Ausente quando não há números."
+    )
+    exclusoes: list[ItemExclusao] = Field(default_factory=list)
+    riscos: list[str] = Field(default_factory=list, description="Ressalvas que acompanham os números (ex.: pendências aceitas).")
     pendencias: list[Pendencia] = Field(default_factory=list)
     trilhaFerramentas: list[EvidenciaTool] = Field(default_factory=list)

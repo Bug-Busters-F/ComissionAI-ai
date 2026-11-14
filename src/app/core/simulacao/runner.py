@@ -96,7 +96,7 @@ def main():
         resource.setrlimit(resource.RLIMIT_FSIZE, (0, 0))
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
-    campos = {"valorVenda", "taxa", "min", "max", "percentual", "valorFixo", "multiplicadorVendas"}
+    campos = {"valorVenda", "taxa", "taxaContratual", "min", "max", "percentual", "valorFixo", "multiplicadorVendas"}
     vendas = _numerico(carga["vendas"], campos)
     regras = _numerico(carga["regras"], campos)
     cenarios = _numerico(carga["cenarios"], campos)
