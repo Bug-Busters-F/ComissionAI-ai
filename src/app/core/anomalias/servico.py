@@ -80,6 +80,7 @@ def analisar(request: AnalisarAnomaliasRequest) -> AnalisarAnomaliasResponse:
                               diasSemCobertura=ag.dias_na_competencia - len(ag.dias_com_venda))
     return AnalisarAnomaliasResponse(
         execucaoId=request.contexto.execucaoId,
+        contexto=request.contexto,
         competencia=comp,
         metodo=MetodoAnomalia(k=k, amostraMinima=minimo),
         versaoDados=versao,

@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     # Mesma chave usada pelo backend; nunca recebida do navegador.
     ai_service_api_key: str = ""
     ai_service_auth_header: str = "X-Internal-Api-Key"
+    # IA-10: a mesma chave protege as rotas de ENTRADA. true = sem chave configurada, responde 503 (produção).
+    ai_inbound_auth_obrigatoria: bool = False
 
     # --- Agente ---
     # Por padrão, só a extração usa o modelo; as consultas têm argumentos conhecidos.

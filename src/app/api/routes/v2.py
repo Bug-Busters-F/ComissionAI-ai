@@ -4,6 +4,8 @@ atualização de artefatos após edição manual (IA-6/IA-7). O contrato é vali
 e documentado no Swagger.
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.agente import AgenteInterpretador
@@ -30,6 +32,13 @@ from app.schemas.proposta import (
 from app.tools import criar_registry
 
 router = APIRouter(prefix="/api/v2", tags=["v2"])
+logger = logging.getLogger(__name__)
+
+
+def _registrar(rota: str, contexto) -> None:
+    """IA-10: identificadores no log (o X-Correlation-Id entra pelo filtro de logging)."""
+    logger.info("%s campanha=%s revisao=%s execucao=%s usuario=%s programa=%s", rota, contexto.campanhaId,
+                contexto.revisao, contexto.execucaoId, contexto.usuarioSolicitanteId, contexto.versaoPrograma)
 
 def get_agente() -> AgenteInterpretador:
     """Fábrica injetável (os testes substituem por um agente com LLM e backend falsos)."""
@@ -53,7 +62,10 @@ def gerar_programa(
     uma assinatura que identifica a versão aprovada. `/simular` pode então executar exatamente esse código
     via `codigoAprovado`/`assinaturaPrograma`, sem reinventá-lo a cada clique em simular.
     """
-    return servico.gerar_programa(request)
+    _registrar("gerar-programa", request.contexto)
+    resposta = servico.gerar_programa(request)
+    resposta.contexto = request.contexto
+    return resposta
 
 
 @router.get(
@@ -87,7 +99,10 @@ def simular(request: SimularRequest, servico: ServicoSimulacao = Depends(get_sim
     Aceita `vendas` (recorte já resolvido pelo backend, BACK-10) como única fonte de dados quando informado,
     e `codigoAprovado`/`assinaturaPrograma` (de /gerar-programa, IA-2) para executar sem regerar o código.
     """
-    return servico.simular(request)
+    _registrar("simular", request.contexto)
+    resposta = servico.simular(request)
+    resposta.contexto = request.contexto
+    return resposta
 
 
 @router.post(
@@ -146,6 +161,7 @@ def analisar_anomalias(request: AnalisarAnomaliasRequest) -> AnalisarAnomaliasRe
     Agrega as vendas por colaborador/dia, compara cada total com o grupo de mesma marca e cargo (IQR de
     Tukey) e devolve os totais fora da faixa como indícios para conferência. Não usa LLM e não altera vendas.
     """
+    _registrar("anomalias", request.contexto)
     try:
         return anomalias.analisar(request)
     except anomalias.VolumeExcedido as e:

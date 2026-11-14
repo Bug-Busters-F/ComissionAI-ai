@@ -52,6 +52,11 @@ class ContextoProposta(BaseModel):
     execucaoId: str | None = Field(
         default=None, description="Id da execução no backend; devolvido em cada explicação (IA-7)."
     )
+    # IA-10: rastreabilidade ponta a ponta. A IA não autentica usuários: só registra e devolve o id recebido.
+    usuarioSolicitanteId: str | None = None
+    versaoPrograma: str | None = Field(
+        default=None, description="Versão do programa aprovada no backend (BACK-9); a IA devolve também a assinatura."
+    )
 
     model_config = ConfigDict(extra="ignore")
 
@@ -390,6 +395,11 @@ class SimularRequest(BaseModel):
         description="IA-6: para cada cenário acima do orçamento, buscar uma alternativa de parâmetros verificada "
         "por reexecução. Exige `orcamento`.",
     )
+    versoesFontes: dict[str, Any] | None = Field(
+        default=None,
+        description="`versoesFontes` do recorte (BACK-10). Os hashes (hashRecorte, hashVendas, hashRh…) e a versão "
+        "da campanha voltam em `versaoFontes.recorte`.",
+    )
 
     @field_validator("orcamento")
     @classmethod
@@ -419,6 +429,7 @@ class ProgramaGeradoResponse(BaseModel):
     assinatura: str = Field(description="sha256 do código (fixo ou gerado); identifica a versão aprovada.")
     premissas: list[str] = Field(default_factory=list)
     pendencias: list[Pendencia] = Field(default_factory=list)
+    contexto: ContextoProposta | None = Field(default=None, description="Identificadores recebidos, devolvidos (IA-10).")
 
 
 class ProgramaArmazenado(BaseModel):
@@ -591,5 +602,6 @@ class SimularResponse(BaseModel):
     explicacoes: list[ExplicacaoCenario] = Field(
         default_factory=list, description="IA-7: uma explicação por cenário com números, sem LLM."
     )
+    contexto: ContextoProposta | None = Field(default=None, description="Identificadores recebidos, devolvidos (IA-10).")
     pendencias: list[Pendencia] = Field(default_factory=list)
     trilhaFerramentas: list[EvidenciaTool] = Field(default_factory=list)

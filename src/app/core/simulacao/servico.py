@@ -299,11 +299,11 @@ class ServicoSimulacao:
 
     def _dados(self, request: SimularRequest) -> tuple[list[dict[str, Any]], dict[str, Any]] | _Falha:
         if request.vendas is not None:
-            return self._dados_do_recorte(request.vendas, request.competencia)
+            return self._dados_do_recorte(request.vendas, request.competencia, request.versoesFontes)
         return self._dados_via_consulta(request)
 
     def _dados_do_recorte(
-        self, vendas: list[VendaRecorte], competencia: str
+        self, vendas: list[VendaRecorte], competencia: str, versoes: dict[str, Any] | None = None
     ) -> tuple[list[dict[str, Any]], dict[str, Any]] | _Falha:
         """
         Recorte enviado pelo backend (BACK-10): fonte ÚNICA de dados — não há busca à base por fora,
@@ -316,7 +316,11 @@ class ServicoSimulacao:
         if not vendas:
             return _Falha(CodigoPendencia.CAMPO_AUSENTE, "O recorte de vendas enviado pelo backend está vazio.")
         vendas_sb = [_venda_recorte_para_sandbox(v) for v in vendas]
-        return vendas_sb, {"origemDados": "RECORTE_BACKEND", "competencia": competencia, "qtdVendas": len(vendas_sb)}
+        fontes: dict[str, Any] = {"origemDados": "RECORTE_BACKEND", "competencia": competencia,
+                                  "qtdVendas": len(vendas_sb)}
+        if versoes:
+            fontes["recorte"] = _versoes_recorte(versoes)
+        return vendas_sb, fontes
 
     def _dados_via_consulta(self, request: SimularRequest) -> tuple[list[dict[str, Any]], dict[str, Any]] | _Falha:
         tool = self._tools.obter("obter_dados_simulacao")
@@ -536,6 +540,17 @@ class ServicoSimulacao:
 
 
 # --------------------------------------------------------------------- helpers
+def _versoes_recorte(versoes: dict[str, Any]) -> dict[str, Any]:
+    """IA-10: hashes do BACK-10 e versão da campanha, para ligar o resultado aos dados exatos usados."""
+    saida: dict[str, Any] = {k: v for k, v in sorted(versoes.items()) if k.startswith("hash") and v is not None}
+    campanha = versoes.get("campanha")
+    if isinstance(campanha, dict):
+        for k in ("campanhaId", "versaoId", "versaoNumero", "hashArtefatosCodigo"):
+            if campanha.get(k) is not None:
+                saida[f"campanha.{k}"] = campanha[k]
+    return saida
+
+
 def _assinatura(codigo: str) -> str:
     return hashlib.sha256(codigo.encode()).hexdigest()
 

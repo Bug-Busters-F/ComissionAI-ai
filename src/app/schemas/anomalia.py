@@ -9,7 +9,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.schemas.proposta import ContextoProposta
 
@@ -53,7 +53,10 @@ class AnalisarAnomaliasRequest(BaseModel):
         description="RH da competência. Quando informado, é a referência: venda de matrícula ausente é erro de carga.",
     )
     parametros: ParametrosAnomalia = Field(default_factory=ParametrosAnomalia)
-    versaoFontes: dict[str, Any] = Field(default_factory=dict, description="Hashes do recorte (BACK-10), ecoados.")
+    versaoFontes: dict[str, Any] = Field(
+        default_factory=dict, validation_alias=AliasChoices("versaoFontes", "versoesFontes"),
+        description="Hashes do recorte (BACK-10, `versoesFontes`), ecoados.",
+    )
 
 
 # ------------------------------------------------------------------------------ saída
@@ -148,6 +151,7 @@ class AnalisarAnomaliasResponse(BaseModel):
     tipo: Literal["INDICIO_PARA_CONFERENCIA"] = "INDICIO_PARA_CONFERENCIA"
     aviso: str = "Anomalia é indício para conferência, não correção automática da venda."
     execucaoId: str | None = None
+    contexto: ContextoProposta | None = Field(default=None, description="Identificadores recebidos, devolvidos (IA-10).")
     competencia: str
     granularidade: Literal["DIARIA"] = "DIARIA"
     metodo: MetodoAnomalia
