@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     calib_max_tentativas: int = Field(default=12, ge=2, le=30)
     calib_max_segundos: float = Field(default=20.0, gt=0, le=120)
 
+    # --- Anomalias (IA-8): IQR de Tukey por grupo marca + cargo ---
+    anomalia_k: float = Field(default=1.5, gt=0, le=10)
+    anomalia_amostra_minima: int = Field(default=8, ge=4, le=1000)
+    anomalia_max_vendas: int = Field(default=200000, ge=1)
+
     # --- API ---
     app_host: str = "0.0.0.0"
     app_port: int = 8000

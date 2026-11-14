@@ -8,10 +8,12 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.agente import AgenteInterpretador
 from app.core.agente.hooks import HooksAjusteSobreBase
+from app.core.anomalias import servico as anomalias
 from app.core.services.artefatos import ServicoArtefatos
 from app.core.services.reinterpretador import ServicoReinterpretacao
 from app.core.simulacao.servico import ServicoSimulacao
 from app.providers import get_provider
+from app.schemas.anomalia import AnalisarAnomaliasRequest, AnalisarAnomaliasResponse
 from app.schemas.proposta import (
     AtualizarArtefatosRequest,
     AtualizarArtefatosResponse,
@@ -132,3 +134,19 @@ def atualizar_artefatos(
     servico: ServicoArtefatos = Depends(get_artefatos),
 ) -> AtualizarArtefatosResponse:
     return servico.atualizar(request)
+
+
+@router.post(
+    "/anomalias/analisar",
+    summary="Detectar anomalias diárias de vendas por grupo comparável (IA-8)",
+    response_model=AnalisarAnomaliasResponse,
+)
+def analisar_anomalias(request: AnalisarAnomaliasRequest) -> AnalisarAnomaliasResponse:
+    """
+    Agrega as vendas por colaborador/dia, compara cada total com o grupo de mesma marca e cargo (IQR de
+    Tukey) e devolve os totais fora da faixa como indícios para conferência. Não usa LLM e não altera vendas.
+    """
+    try:
+        return anomalias.analisar(request)
+    except anomalias.VolumeExcedido as e:
+        raise HTTPException(status_code=413, detail=str(e)) from e
