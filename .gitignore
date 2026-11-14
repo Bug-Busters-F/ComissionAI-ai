@@ -35,3 +35,6 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+
+# Bases limpas geradas a partir dos arquivos do cliente (IA-9) — não versionar dados da Dom Rock
+data/bases_limpas/
