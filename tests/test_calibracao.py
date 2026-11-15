@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 sys.path.insert(0, os.path.dirname(__file__))
 
 from app.core.simulacao.calibracao import Avaliacao, Calibrador, aplicar_fator  # noqa: E402
-from app.schemas.proposta import BlocoProposta, Bonus, Cenario, Condicoes, ResultadoCenario  # noqa: E402
+from app.schemas.proposta import BlocoProposta, Bonus, Cenario, Condicoes, FaixaValor, ResultadoCenario  # noqa: E402
 from test_cenarios_orcamento import P1, QUINZENA, VENDAS, regra, simular, venda  # noqa: E402
 
 D = Decimal
@@ -111,6 +111,25 @@ class TestBonus(unittest.TestCase):
         self.assertEqual(nova.resultados[1].custoProjetado, c.custoProjetadoRecalculado)
 
 
+class TestRegrasNaoAplicadas(unittest.TestCase):
+    def test_regra_sem_venda_no_cenario_nao_e_alterada(self):
+        """A p9 (loja sem venda) não paga comissão: ajustá-la não muda o custo e não entra na sugestão."""
+        p9 = regra("p9", "0.08", codLoja=12)
+        r = simular(propostas=[P1, p9], orcamento="35", periodoCampanha=QUINZENA, calibrar=True)
+        c = {x.multiplicadorVendas: x for x in r.calibracoes}[D("1.2")]
+        self.assertEqual(c.status, "ENQUADRADA")
+        self.assertEqual({a.idLocal for a in c.alteracoes}, {"p1"})
+        nova = simular(propostas=aplicar([P1, p9], c), orcamento="35", periodoCampanha=QUINZENA)
+        self.assertEqual(nova.resultados[2].custoProjetado, c.custoProjetadoRecalculado)
+
+    def test_sem_regra_ajustavel_nao_ha_solucao(self):
+        """Todo o custo vem da taxa contratual (nenhuma regra paga): nada a ajustar."""
+        p = regra("p1", "0.05", faixa=FaixaValor(min=D("90000")), codLoja=75)
+        r = simular(propostas=[p], orcamento="1", periodoCampanha=QUINZENA, calibrar=True)
+        c = r.calibracoes[1]
+        self.assertEqual((c.status, c.alteracoes), ("SEM_SOLUCAO_VIAVEL", []))
+
+
 class TestFalhas(unittest.TestCase):
     def test_sem_orcamento_nao_inventa_sugestao(self):
         r = simular(periodoCampanha=QUINZENA, calibrar=True)
@@ -123,7 +142,8 @@ class TestFalhas(unittest.TestCase):
         self.assertEqual((r.calibracoes, r.statusSugestoes), ([], "NAO_SOLICITADA"))
 
     def excedido(self):
-        return ResultadoCenario(cenario="x", totalVendas=D("100"), totalComissao=D("100"), custoProjetado=D("100"))
+        return ResultadoCenario(cenario="x", totalVendas=D("100"), totalComissao=D("100"), custoProjetado=D("100"),
+                               porBloco={"p1": D("100")})
 
     def test_reexecucao_falha_vira_falha_sem_alteracoes(self):
         cal = Calibrador(lambda b, c: Avaliacao(None, "TIMEOUT: excedeu"), 12, 20)

@@ -14,7 +14,9 @@ Nada desta etapa usa LLM.
 | | **Orçamento** (nunca muda) |
 | | Taxa contratual das vendas sem regra (não pertence à proposta) |
 
-Todos os parâmetros elegíveis são multiplicados pelo mesmo fator `fatorAjuste` λ ∈ (0, 1]. Assim, a proporção entre as regras que o gestor definiu é preservada.
+Os parâmetros elegíveis das regras que **pagaram comissão no cenário** (chaves de `porBloco`, exceto `BASE_CONTRATUAL`) são multiplicados pelo mesmo fator `fatorAjuste` λ ∈ (0, 1]. Assim, a proporção entre essas regras é preservada. Regras sem venda no cenário não são alteradas: a escolha da regra depende do público e da faixa, não da taxa, então mexer nelas não muda o custo e só poluiria a sugestão.
+
+A alternativa pode levar uma taxa da proposta para baixo da taxa contratual (BASE_COMMISS) da mesma venda. Se isso não for aceitável para o negócio, é preciso decisão do PO para usar a taxa contratual como piso.
 
 ## Algoritmo
 

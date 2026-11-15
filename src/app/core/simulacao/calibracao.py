@@ -3,7 +3,8 @@ Calibração verificável por cenário excedido (IA-6 / BUG-119).
 
 Para cada cenário cujo custo projetado passa do orçamento, procura UMA alternativa independente que
 reduz proporcionalmente os parâmetros elegíveis das regras da proposta (taxa, bônus percentual e bônus
-fixo) por um fator λ ∈ (0, 1]. Público, faixas e vigência não mudam: alterá-los mudaria o escopo.
+fixo) das regras que pagaram comissão no cenário, por um fator λ ∈ (0, 1]. Público, faixas e vigência
+não mudam: alterá-los mudaria o escopo.
 
 Garantias:
 - toda alternativa é REEXECUTADA no mesmo programa da simulação (template ou código aprovado); só é
@@ -47,13 +48,18 @@ def _arred(valor: Decimal, escala: Decimal) -> Decimal:
     return valor.quantize(escala, rounding=ROUND_HALF_UP)
 
 
-def aplicar_fator(blocos: list[BlocoProposta], fator: Decimal | None) -> list[BlocoProposta]:
+def aplicar_fator(blocos: list[BlocoProposta], fator: Decimal | None,
+                  ajustaveis: set[str] | None = None) -> list[BlocoProposta]:
     """
     Escala taxa e bônus de cada regra. `fator=None` = parâmetros no mínimo representável (piso da busca).
     Nunca zera um parâmetro: as validações exigem taxa e bônus positivos.
+    `ajustaveis` = ids das regras que podem mudar (None = todas); as demais saem iguais.
     """
     saida: list[BlocoProposta] = []
     for b in blocos:
+        if ajustaveis is not None and b.idLocal not in ajustaveis:
+            saida.append(b)
+            continue
         def esc(v: Decimal | None, escala: Decimal) -> Decimal | None:
             if v is None:
                 return None
@@ -106,11 +112,14 @@ class Calibrador:
             return Calibracao(**base, status="NAO_NECESSARIA", tentativas=0)
 
         tentativas = 0
+        # Só as regras que pagaram comissão neste cenário são alteradas: a escolha da regra depende do
+        # público e da faixa (não da taxa), então mexer nas outras não muda o custo e só poluiria a sugestão.
+        usadas = set(resultado.porBloco or {}) - {"BASE_CONTRATUAL"}
 
         def avaliar(fator: Decimal | None) -> tuple[Avaliacao, list[BlocoProposta]]:
             nonlocal tentativas
             tentativas += 1
-            ajustados = aplicar_fator(blocos, fator)
+            ajustados = aplicar_fator(blocos, fator, usadas)
             return self._avaliar(ajustados, cenario), ajustados
 
         # 1. Piso: se nem os parâmetros mínimos cabem, não há solução por ajuste de parâmetros.
