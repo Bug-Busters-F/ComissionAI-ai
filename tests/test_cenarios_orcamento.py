@@ -180,6 +180,28 @@ class TestBloqueiosDeEncaminhamento(unittest.TestCase):
         self.assertFalse(r.orcamento.aptoEncaminhamentoGerente)
         self.assertEqual(r.resultados[1].totalComissao, D("0.00"))
 
+    def test_conflito_fica_fora_dos_dois_lados_da_diferenca(self):
+        """Venda em conflito não entra no custo proposto; também não pode entrar no custo contratual."""
+        propostas = [regra("p1", "0.02", codLoja=75), regra("p2", "0.03", codLoja=75), regra("p3", "0.04", codLoja=76)]
+        vendas = [venda("a", "1000.00"), venda("b", "500.00"), venda("d", "2000.00", loja=76)]
+        c100 = simular(propostas=propostas, vendas=vendas).resultados[1]
+        self.assertEqual(c100.qtdConflito, 2)
+        self.assertEqual(c100.totalComissao, D("80.00"))  # só d: 2000 × 4%
+        self.assertEqual(c100.custoContratual, D("50.00"))  # só d: 2000 × 2,5% (antes: 87,50 com a e b)
+        self.assertEqual(c100.diferenca, D("30.00"))
+
+    def test_conflito_sem_parcela_contratual_nao_devolve_diferenca(self):
+        """Código livre que conta conflitos sem informar `contratualEmConflito`: sem diferença inventada."""
+        pop = preparar_populacao([venda("a", "100"), venda("b", "100")], [regra("p1", "0.1", codLoja=75)],
+                                 [TaxaContratual(**TAXAS[0])])
+        res = [ResultadoCenario(cenario="x", totalVendas=D("200.00"), totalComissao=D("10.00"))]
+        bruto = [{"vendasComRegra": 1, "vendasFallbackContratual": 0, "vendasEmConflito": 1, "vendasSemRegra": 0,
+                  "vendasMudancaFaixa": 0}]
+        c = consolidar(res, bruto, [Cenario(nome="x")], pop, D("100"), None, "2026-12")
+        self.assertIsNone(c.erro)
+        self.assertIsNone(c.resultados[0].custoContratual)
+        self.assertIsNone(c.resultados[0].diferenca)
+
 
 class TestTaxaContratual(unittest.TestCase):
     def test_codigo_150_resolvido_pela_descricao(self):

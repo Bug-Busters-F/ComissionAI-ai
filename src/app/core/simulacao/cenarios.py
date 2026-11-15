@@ -6,7 +6,8 @@ Parte determinística que roda FORA do sandbox, com as mesmas definições do ba
 
 - população: vendas que pertencem ao público de ao menos uma regra (marca, loja, cargo, canal, matrícula),
   sem considerar faixa nem vigência; o mesmo escopo vale para todos os cenários;
-- custo contratual: Σ HALF_UP(valor escalado × taxa contratual) sobre a população;
+- custo contratual: Σ HALF_UP(valor escalado × taxa contratual) sobre as vendas calculadas da população
+  (vendas em conflito de regras ficam fora dos dois lados da comparação);
 - custo proposto: comissão calculada pelo programa (regra da proposta ou fallback contratual);
 - projeção: fator = dias inclusivos da campanha ÷ 30 (escala 6); custo projetado = HALF_UP(proposto × fator);
 - enquadramento: custo projetado ≤ orçamento; o cenário de 100% define o encaminhamento ao gerente.
@@ -193,7 +194,11 @@ def consolidar(
             return Consolidacao([], _resumo_vazio(orcamento, dias, fator), exclusoes,
                                 f"as vendas calculadas e não calculadas do cenário '{cen.nome}' não somam "
                                 f"as {qtd} vendas do escopo.")
-        contratual = _custo_contratual(populacao.vendas, cen.multiplicadorVendas) if populacao.modo_contratual else None
+        contratual = None
+        if populacao.modo_contratual:
+            nao_calculado = _contratual_nao_calculado(bruto, contadores)
+            if nao_calculado is not None:
+                contratual = _q(_custo_contratual(populacao.vendas, cen.multiplicadorVendas) - nao_calculado)
         diferenca = _q(res.totalComissao - contratual) if contratual is not None else None
         projetado = _q(res.totalComissao * fator)
         delta_proj = _q(diferenca * fator) if diferenca is not None else None
@@ -228,6 +233,24 @@ def _contadores(bruto: dict[str, Any]) -> dict[str, int] | None:
     if not all(isinstance(bruto.get(k), int) and not isinstance(bruto.get(k), bool) for k in chaves.values()):
         return None
     return {nome: bruto[k] for nome, k in chaves.items()}
+
+
+def _contratual_nao_calculado(bruto: dict[str, Any], contadores: dict[str, int] | None) -> Decimal | None:
+    """
+    Custo contratual das vendas que o programa não calculou (conflito de regras), para o custo contratual
+    comparar as mesmas vendas do custo proposto. None = há conflito e o valor não veio: a diferença contratual
+    não é confiável e não é devolvida (em vez de um número errado).
+    """
+    if contadores is None or contadores["conflito"] == 0:
+        return Decimal("0")
+    valor = bruto.get("contratualEmConflito")
+    if valor is None or isinstance(valor, bool):
+        return None
+    try:
+        d = Decimal(str(valor))
+    except ArithmeticError:
+        return None
+    return d if d.is_finite() and d >= 0 else None
 
 
 def _custo_contratual(vendas: list[dict[str, Any]], mult: Decimal) -> Decimal:

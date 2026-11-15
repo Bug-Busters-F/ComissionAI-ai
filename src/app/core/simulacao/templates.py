@@ -7,6 +7,8 @@ Regras de negócio espelhadas do Spring (`SimulacaoCenariosService`/`ReferenciaP
   a faixa de valor desempata (+0.5); empate no topo = conflito (a venda não é calculada e é contada);
 - venda do público sem regra aplicável na faixa usa a taxa contratual (`taxaContratual`), agrupada em
   `porBloco["BASE_CONTRATUAL"]`; sem taxa contratual a venda também não é calculada e é contada (IA-5);
+- `contratualEmConflito` = custo contratual das vendas em conflito, para o custo contratual comparar só as
+  vendas calculadas;
 - comissão = valor×taxa + valor×bônus% + bônus fixo, cada parcela HALF_UP escala 2;
 - o cenário multiplica o valor de cada venda (HALF_UP escala 2) e as faixas são reavaliadas pelo valor
   escalado; `vendasMudancaFaixa` conta as vendas cuja regra muda em relação ao valor original (100%).
@@ -101,6 +103,7 @@ def simular(vendas, regras, cenario):
     por_bloco = {}
     por_matricula = {}
     n = {"regra": 0, "contratual": 0, "conflito": 0, "sem": 0, "mudou": 0}
+    contratual_conflito = Decimal("0")
     for venda in vendas:
         valor = _q(venda["valorVenda"] * mult)
         total_vendas += valor
@@ -109,6 +112,8 @@ def simular(vendas, regras, cenario):
             n["mudou"] += 1
         if chave is None:
             n["conflito"] += 1
+            if venda.get("taxaContratual") is not None:
+                contratual_conflito += _q(valor * venda["taxaContratual"])
             continue
         if regra is None:
             taxa = venda.get("taxaContratual")
@@ -135,5 +140,6 @@ def simular(vendas, regras, cenario):
         "vendasEmConflito": n["conflito"],
         "vendasSemRegra": n["sem"],
         "vendasMudancaFaixa": n["mudou"],
+        "contratualEmConflito": _q(contratual_conflito),
     }
 '''

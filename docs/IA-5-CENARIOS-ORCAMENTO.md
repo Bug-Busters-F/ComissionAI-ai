@@ -22,7 +22,7 @@ Sem `cenarios` e sem `pedido`, os cenários padrão são os quatro, sem chamar o
 1. **População (escopo):** vendas que pertencem ao público de ao menos uma regra (marca, loja, cargo, canal, matrícula). Faixa e vigência não definem o público. O mesmo escopo vale para os quatro cenários.
 2. **Vigência das regras:** não filtra as vendas históricas da competência de referência, igual ao backend. Ela define o período da projeção.
 3. **Por venda e por cenário:** valor escalado (HALF_UP, 2 casas). As faixas são reavaliadas pelo valor escalado, e a regra de maior especificidade é aplicada. Sem regra aplicável na faixa, aplica-se a **taxa contratual**, somada em `porBloco["BASE_CONTRATUAL"]`.
-4. **Custo contratual:** Σ HALF_UP(valor escalado × taxa contratual) sobre o escopo.
+4. **Custo contratual:** Σ HALF_UP(valor escalado × taxa contratual) sobre as vendas **calculadas** do escopo. As vendas em conflito de regras não entram no custo proposto e, por isso, também saem do custo contratual (o template devolve `contratualEmConflito`). Se um código livre contar conflitos sem informar esse valor, `custoContratual` e `diferenca` voltam nulos em vez de um número que compara vendas diferentes.
 5. **Projeção:** `custoProjetado` = HALF_UP(custo proposto × fator); `deltaProjetado` = HALF_UP(diferença × fator).
 6. **Enquadramento:** `custoProjetado ≤ orcamento` → `ENQUADRADO`; acima → `ACIMA_DO_TETO`; sem orçamento → `NAO_APLICAVEL`. Os nomes são os do `EnquadramentoOrcamentoCenarioDTO`.
 7. **Encaminhamento:** `orcamento.valorEncaminhamento` é o custo projetado do cenário de 100%, valor usado pelo BACK-4. Fica apto só se o cenário de 100% estiver enquadrado e não houver venda não calculável.
