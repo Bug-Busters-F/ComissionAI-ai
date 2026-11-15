@@ -160,6 +160,15 @@ class TestReprodutibilidade(unittest.TestCase):
         vendas = grupo_normal() + [venda("x", "MX", 9000)]
         self.assertEqual(rodar(vendas).alertas[0].id, rodar(vendas).alertas[0].id)
 
+    def test_id_nao_muda_quando_outra_venda_da_base_muda(self):
+        """O BACK-12 guarda o alerta consultado: corrigir outra venda não pode trocar o id do alerta."""
+        base = grupo_normal() + [venda("x", "MX", 9000)]
+        alterada = [dict(v) for v in base]
+        alterada[0]["valorVenda"] = str(Decimal(str(alterada[0]["valorVenda"])) + 1)
+        r1, r2 = rodar(base), rodar(alterada)
+        self.assertNotEqual(r1.versaoDados, r2.versaoDados)
+        self.assertEqual(r1.alertas[0].id, r2.alertas[0].id)
+
     def test_texto_orienta_conferir_e_nao_corrige(self):
         r = rodar(grupo_normal() + [venda("x", "MX", 9000)], versaoFontes={"hashRecorte": "abc"},
                   contexto={"execucaoId": "e1"})

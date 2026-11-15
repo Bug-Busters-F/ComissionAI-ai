@@ -59,7 +59,7 @@ Mesmo formato de `vendas` e `dadosRh` do recorte do backend (`RecortePopulacaoIa
 
 **Campos de cada alerta:**
 
-- `id`, estável para o mesmo recorte e os mesmos parâmetros;
+- `id` de negócio (competência + grupo + matrícula + dia): não muda quando outras vendas da base são corrigidas, para o BACK-12 manter o vínculo do alerta já consultado. A versão exata dos dados está em `versaoDados`;
 - `tipo`, `matricula`, `data`;
 - `valorObservado`, `qtdVendas`, `vendaIds` (até 50);
 - `faixaEsperada{min,max}` e `distanciaFaixa`;

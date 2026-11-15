@@ -92,7 +92,8 @@ class MetodoAnomalia(BaseModel):
 
 
 class AlertaAnomalia(BaseModel):
-    id: str = Field(description="Identificador estável: mesmo recorte e parâmetros -> mesmo id.")
+    id: str = Field(description="Identificador de negócio estável (competência + grupo + matrícula + dia): não muda "
+                    "quando outras vendas da base mudam; a versão dos dados está em `versaoDados`.")
     tipo: Literal["ACIMA_DA_FAIXA", "ABAIXO_DA_FAIXA"]
     matricula: str
     data: date

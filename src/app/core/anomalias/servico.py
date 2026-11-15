@@ -60,7 +60,7 @@ def analisar(request: AnalisarAnomaliasRequest) -> AnalisarAnomaliasResponse:
     grupos: list[ResultadoGrupo] = []
     alertas: list[AlertaAnomalia] = []
     for chave in sorted(ag.grupos, key=lambda c: (c[0], c[1], c[2] or "")):
-        resultado, novos = _avaliar_grupo(chave, ag.grupos[chave], comp, k, minimo, versao)
+        resultado, novos = _avaliar_grupo(chave, ag.grupos[chave], comp, k, minimo)
         grupos.append(resultado)
         alertas.extend(novos)
 
@@ -95,8 +95,8 @@ def analisar(request: AnalisarAnomaliasRequest) -> AnalisarAnomaliasResponse:
     )
 
 
-def _avaliar_grupo(chave: ChaveGrupo, obs: list[Observacao], comp: str, k: Decimal, minimo: int,
-                   versao: str) -> tuple[ResultadoGrupo, list[AlertaAnomalia]]:
+def _avaliar_grupo(chave: ChaveGrupo, obs: list[Observacao], comp: str, k: Decimal,
+                   minimo: int) -> tuple[ResultadoGrupo, list[AlertaAnomalia]]:
     grupo = GrupoComparavel(codMarca=chave[0], codCargo=chave[1], descriCargo=chave[2], competencia=comp)
     base = {"grupo": grupo, "tamanhoAmostra": len(obs), "colaboradores": len({o.matricula for o in obs})}
     if len(obs) < minimo:
@@ -112,7 +112,7 @@ def _avaliar_grupo(chave: ChaveGrupo, obs: list[Observacao], comp: str, k: Decim
     if f.iqr == 0:
         return ResultadoGrupo(**base, status="SEM_VARIACAO", evidencia=evid, faixaEsperada=faixa,
                               motivo="Q1 = Q3 (valores repetidos): sem dispersão para definir anomalia."), []
-    alertas = [_alerta(o, grupo, f, evid, faixa, len(obs), versao) for o in obs
+    alertas = [_alerta(o, grupo, f, evid, faixa, len(obs)) for o in obs
                if o.valor > f.maximo or o.valor < f.minimo]
     alertas.sort(key=lambda a: (-a.distanciaFaixa, a.matricula, a.data))
     return ResultadoGrupo(**base, status="ANALISADO", evidencia=evid, faixaEsperada=faixa,
@@ -120,7 +120,7 @@ def _avaliar_grupo(chave: ChaveGrupo, obs: list[Observacao], comp: str, k: Decim
 
 
 def _alerta(o: Observacao, grupo: GrupoComparavel, f: Faixa, evid: EvidenciaIqr, faixa: FaixaEsperada,
-            n: int, versao: str) -> AlertaAnomalia:
+            n: int) -> AlertaAnomalia:
     acima = o.valor > f.maximo
     distancia = o.valor - f.maximo if acima else f.minimo - o.valor
     descr = f" ({grupo.descriCargo})" if grupo.descriCargo else ""
@@ -131,7 +131,9 @@ def _alerta(o: Observacao, grupo: GrupoComparavel, f: Faixa, evid: EvidenciaIqr,
         f"mediana {_brl(f.mediana)}, Q3 {_brl(f.q3)}, {n} observações). "
         "Conferir as vendas desse dia na origem; o alerta não altera nem corrige a venda."
     )
-    chave = f"{versao}|{grupo.codMarca}|{grupo.codCargo}|{grupo.descriCargo}|{o.matricula}|{o.data.isoformat()}"
+    # Id de negócio (grupo + matrícula + dia + competência), igual entre reanálises: o BACK-12 mantém o vínculo
+    # do alerta já consultado mesmo que outra venda da base mude. A versão dos dados fica em `versaoDados`.
+    chave = f"{grupo.competencia}|{grupo.codMarca}|{grupo.codCargo}|{grupo.descriCargo}|{o.matricula}|{o.data.isoformat()}"
     return AlertaAnomalia(
         id=hashlib.sha256(chave.encode("utf-8")).hexdigest()[:20],
         tipo="ACIMA_DA_FAIXA" if acima else "ABAIXO_DA_FAIXA",

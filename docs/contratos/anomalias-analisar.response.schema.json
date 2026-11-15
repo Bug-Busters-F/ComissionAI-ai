@@ -27,7 +27,7 @@
           "$ref": "#/$defs/GrupoComparavel"
         },
         "id": {
-          "description": "Identificador estável: mesmo recorte e parâmetros -> mesmo id.",
+          "description": "Identificador de negócio estável (competência + grupo + matrícula + dia): não muda quando outras vendas da base mudam; a versão dos dados está em `versaoDados`.",
           "title": "Id",
           "type": "string"
         },
