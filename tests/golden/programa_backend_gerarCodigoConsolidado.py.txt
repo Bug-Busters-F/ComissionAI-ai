@@ -1,0 +1,78 @@
+# ===================================================================
+# Programa Executável da Campanha: Natal 2025
+# Período de Vigência: 2025-11-01 até 2025-11-30
+# Versão da Campanha: 3
+# ===================================================================
+from decimal import Decimal, ROUND_HALF_UP
+
+def calcular_comissao(venda: dict) -> float | None:
+    """Calcula a comissão para um registro de venda segundo as regras da campanha."""
+    data_raw = venda.get('data_venda') if venda.get('data_venda') is not None else venda.get('dataVenda', '')
+    data_venda = str(data_raw)[:10]
+    if not venda.get('ignorar_vigencia') and not ('2025-11-01' <= data_venda <= '2025-11-30'):
+        return None
+
+    valor_raw = venda.get('valor_venda')
+    if valor_raw is None:
+        valor_raw = venda.get('valor')
+    if valor_raw is None:
+        return None
+    valor = Decimal(str(valor_raw))
+    if valor <= 0:
+        return None
+
+    centavo = Decimal('0.01')
+    taxa_base_raw = venda.get('taxa_base')
+    taxa_base_venda = Decimal(str(taxa_base_raw)) if taxa_base_raw is not None else None
+
+    # Regra 1: b-mat - Regra b-mat com "aspas" e acentuação
+    if str(venda.get('matricula', '')).strip() == "MATRIC-7":
+        # Operação: DEFINIR_TAXA
+        taxa = Decimal('0.08')
+        comissao = (valor * taxa).quantize(centavo, rounding=ROUND_HALF_UP)
+        return float(comissao)
+
+    # Regra 2: b-loja - Regra b-loja com "aspas" e acentuação
+    if venda.get('cod_loja') == 75 and valor >= Decimal('1000'):
+        # Operação: ACRESCIMO_PONTOS
+        ajuste = Decimal('0.01')
+        taxa = (taxa_base_venda + ajuste) if taxa_base_venda is not None else Decimal('0.035')
+        comissao = (valor * taxa).quantize(centavo, rounding=ROUND_HALF_UP)
+        bonus_perc = Decimal('0.005')
+        comissao += (valor * bonus_perc).quantize(centavo, rounding=ROUND_HALF_UP)
+        return float(comissao)
+
+    # Regra 3: b-cargo - Regra b-cargo com "aspas" e acentuação
+    if venda.get('cod_cargo') == 150:
+        # Operação: DESCONTO_PONTOS
+        ajuste = Decimal('0.005')
+        taxa = max(Decimal('0'), taxa_base_venda - ajuste) if taxa_base_venda is not None else Decimal('0.02')
+        comissao = (valor * taxa).quantize(centavo, rounding=ROUND_HALF_UP)
+        return float(comissao)
+
+    # Regra 4: b-div - Regra b-div com "aspas" e acentuação
+    if venda.get('cod_cargo') == 160:
+        # Operação: DIVISOR_BASE
+        divisor = Decimal('2')
+        taxa = (taxa_base_venda / divisor) if (taxa_base_venda is not None and divisor != 0) else Decimal('0.01')
+        comissao = (valor * taxa).quantize(centavo, rounding=ROUND_HALF_UP)
+        return float(comissao)
+
+    # Regra 5: b-canal - Regra b-canal com "aspas" e acentuação
+    if venda.get('canal') == "ECOMMERCE":
+        # Operação: MULTIPLICADOR_BASE
+        fator = Decimal('1.5')
+        taxa = (taxa_base_venda * fator) if taxa_base_venda is not None else Decimal('0.03')
+        comissao = (valor * taxa).quantize(centavo, rounding=ROUND_HALF_UP)
+        return float(comissao)
+
+    # Regra 6: b-marca - Regra b-marca com "aspas" e acentuação
+    if venda.get('cod_marca') == 10:
+        # Operação: DEFINIR_TAXA
+        taxa = Decimal('0.03')
+        comissao = (valor * taxa).quantize(centavo, rounding=ROUND_HALF_UP)
+        bonus_fixo = Decimal('5')
+        comissao += bonus_fixo.quantize(centavo, rounding=ROUND_HALF_UP)
+        return float(comissao)
+
+    return None

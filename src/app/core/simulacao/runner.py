@@ -85,6 +85,45 @@ def _numerico(obj, campos):
     return obj
 
 
+def _comissao(valor):
+    """Retorno de `calcular_comissao`: None (regra não aplicada) ou número finito, devolvido como texto."""
+    if valor is None:
+        return None
+    if isinstance(valor, bool) or not isinstance(valor, (int, float, Decimal)):
+        raise TypeError("retorno deve ser número ou None, recebido " + type(valor).__name__)
+    d = Decimal(str(valor))
+    if not d.is_finite():
+        raise ValueError("valor não finito")
+    return str(d)
+
+
+def _executar_programa(carga, ambiente):
+    """
+    Programa aprovado no backend (BACK-9): chama `calcular_comissao` uma vez por item, na ordem recebida.
+    Os dados da venda chegam como o backend os serializa (sem conversão). Erro em qualquer item interrompe tudo.
+    """
+    codigo = compile(carga["codigo"], "<programa>", "exec")
+    sys.addaudithook(_hook)
+    exec(codigo, ambiente)
+    calcular = ambiente["calcular_comissao"]
+    com_contexto = int(carga["aridade"]) == 2
+    saida = []
+    for item in carga["itens"]:
+        try:
+            if com_contexto:
+                saida.append(_comissao(calcular(item["venda"], item.get("contexto") or {})))
+            else:
+                saida.append(_comissao(calcular(item["venda"])))
+        except MemoryError:
+            raise
+        except Exception as exc:
+            sys.stdout.write(json.dumps({"erro": "item " + str(item.get("id"))[:80] + ": " + type(exc).__name__
+                                         + ": " + str(exc)[:200]}))
+            sys.stdout.flush()
+            _EXIT(2)
+    return json.dumps({"resultados": saida})
+
+
 def main():
     carga = json.loads(sys.stdin.read())
     cfg = carga["limites"]
@@ -96,21 +135,25 @@ def main():
         resource.setrlimit(resource.RLIMIT_FSIZE, (0, 0))
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
-    campos = {"valorVenda", "taxa", "taxaContratual", "min", "max", "percentual", "valorFixo", "multiplicadorVendas"}
-    vendas = _numerico(carga["vendas"], campos)
-    regras = _numerico(carga["regras"], campos)
-    cenarios = _numerico(carga["cenarios"], campos)
-
     seguros = {n: getattr(_b, n) for n in SAFE_NAMES}
     seguros["__import__"] = _imp
     ambiente = {"__builtins__": seguros, "__name__": "sandbox"}
 
-    codigo = compile(carga["codigo"], "<simulacao>", "exec")
-    sys.addaudithook(_hook)
-    exec(codigo, ambiente)
-    simular = ambiente["simular"]
-    saida = [_converter(simular(vendas, regras, c)) for c in cenarios]
-    texto = json.dumps({"resultados": saida})
+    if carga.get("modo") == "programa":
+        texto = _executar_programa(carga, ambiente)
+    else:
+        campos = {"valorVenda", "taxa", "taxaContratual", "min", "max", "percentual", "valorFixo",
+                  "multiplicadorVendas"}
+        vendas = _numerico(carga["vendas"], campos)
+        regras = _numerico(carga["regras"], campos)
+        cenarios = _numerico(carga["cenarios"], campos)
+
+        codigo = compile(carga["codigo"], "<simulacao>", "exec")
+        sys.addaudithook(_hook)
+        exec(codigo, ambiente)
+        simular = ambiente["simular"]
+        saida = [_converter(simular(vendas, regras, c)) for c in cenarios]
+        texto = json.dumps({"resultados": saida})
     if len(texto) > int(cfg["saida_max_bytes"]):
         _EXIT(98)
     sys.stdout.write(texto)

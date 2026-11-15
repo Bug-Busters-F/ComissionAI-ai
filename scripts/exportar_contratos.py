@@ -17,6 +17,11 @@ RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "src"))
 
 from app.schemas.anomalia import AnalisarAnomaliasRequest, AnalisarAnomaliasResponse  # noqa: E402
+from app.schemas.execucao import (  # noqa: E402
+    ExecutarProgramaErro,
+    ExecutarProgramaRequest,
+    ExecutarProgramaResponse,
+)
 from app.schemas.proposta import (  # noqa: E402
     GerarProgramaRequest,
     ProgramaGeradoResponse,
@@ -32,6 +37,9 @@ MODELOS = {
     "simular.response": (SimularResponse, "serialization"),
     "anomalias-analisar.request": (AnalisarAnomaliasRequest, "validation"),
     "anomalias-analisar.response": (AnalisarAnomaliasResponse, "serialization"),
+    "executar-programa.request": (ExecutarProgramaRequest, "validation"),
+    "executar-programa.response": (ExecutarProgramaResponse, "serialization"),
+    "executar-programa.erro": (ExecutarProgramaErro, "serialization"),
 }
 
 

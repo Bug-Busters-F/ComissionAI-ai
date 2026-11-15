@@ -311,6 +311,89 @@
           "description": "error_code NAO_ENCONTRADO."
         }
       ]
+    },
+    {
+      "name": "IA-10 — BUG-123: executar-programa (contrato do BACK-9/BACK-11)",
+      "item": [
+        {
+          "name": "Executar programa aprovado — simulação",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "{{authHeader}}",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v2/executar-programa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigoFonte\": \"# ===================================================================\\n# Programa Executável da Campanha: Natal\\n# Período de Vigência: 2025-11-01 até 2025-11-30\\n# Versão da Campanha: 3\\n# ===================================================================\\nfrom decimal import Decimal, ROUND_HALF_UP\\n\\ndef calcular_comissao(venda: dict) -> float | None:\\n    \\\"\\\"\\\"Calcula a comissão para um registro de venda segundo as regras da campanha.\\\"\\\"\\\"\\n    data_raw = venda.get('data_venda') if venda.get('data_venda') is not None else venda.get('dataVenda', '')\\n    data_venda = str(data_raw)[:10]\\n    if not venda.get('ignorar_vigencia') and not ('2025-11-01' <= data_venda <= '2025-11-30'):\\n        return None\\n\\n    valor_raw = venda.get('valor_venda')\\n    if valor_raw is None:\\n        valor_raw = venda.get('valor')\\n    if valor_raw is None:\\n        return None\\n    valor = Decimal(str(valor_raw))\\n    if valor <= 0:\\n        return None\\n\\n    centavo = Decimal('0.01')\\n    taxa_base_raw = venda.get('taxa_base')\\n    taxa_base_venda = Decimal(str(taxa_base_raw)) if taxa_base_raw is not None else None\\n\\n    # Regra 1: b1 - Loja 75 acima de mil\\n    if venda.get('cod_loja') == 75 and valor >= Decimal('1000'):\\n        # Operação: ACRESCIMO_PONTOS\\n        ajuste = Decimal('0.01')\\n        taxa = (taxa_base_venda + ajuste) if taxa_base_venda is not None else Decimal('0.035')\\n        comissao = (valor * taxa).quantize(centavo, rounding=ROUND_HALF_UP)\\n        return float(comissao)\\n\\n    # Regra 2: b2 - Marca 10\\n    if venda.get('cod_marca') == 10:\\n        # Operação: DEFINIR_TAXA\\n        taxa = Decimal('0.03')\\n        comissao = (valor * taxa).quantize(centavo, rounding=ROUND_HALF_UP)\\n        bonus_fixo = Decimal('5')\\n        comissao += bonus_fixo.quantize(centavo, rounding=ROUND_HALF_UP)\\n        return float(comissao)\\n\\n    return None\\n\",\n  \"contexto\": {\n    \"modo\": \"SIMULACAO\",\n    \"campanhaId\": 42,\n    \"versaoCampanha\": 3,\n    \"versaoProgramaPython\": 2,\n    \"competencia\": \"{{competencia}}\"\n  },\n  \"itens\": [\n    {\n      \"id\": \"v1#100\",\n      \"venda\": {\n        \"id_venda\": \"00000000-0000-0000-0000-000000000001\",\n        \"data_venda\": \"2025-11-01\",\n        \"dataVenda\": \"2025-11-01\",\n        \"valor_venda\": 1200.0,\n        \"valor\": 1200.0,\n        \"canal\": \"PADRAO\",\n        \"cod_marca\": 10,\n        \"cod_loja\": 75,\n        \"cod_cargo\": 100,\n        \"matricula\": \"MATRIC-1\",\n        \"taxa_base\": 0.025,\n        \"ignorar_vigencia\": true\n      },\n      \"contexto\": {\n        \"cenario\": \"100%\",\n        \"fator\": 1.0\n      }\n    },\n    {\n      \"id\": \"v1#80\",\n      \"venda\": {\n        \"id_venda\": \"00000000-0000-0000-0000-000000000001\",\n        \"data_venda\": \"2025-11-01\",\n        \"dataVenda\": \"2025-11-01\",\n        \"valor_venda\": 960.0,\n        \"valor\": 960.0,\n        \"canal\": \"PADRAO\",\n        \"cod_marca\": 10,\n        \"cod_loja\": 75,\n        \"cod_cargo\": 100,\n        \"matricula\": \"MATRIC-1\",\n        \"taxa_base\": 0.025,\n        \"ignorar_vigencia\": true\n      },\n      \"contexto\": {\n        \"cenario\": \"80%\",\n        \"fator\": 0.8\n      }\n    },\n    {\n      \"id\": \"v2#100\",\n      \"venda\": {\n        \"id_venda\": \"00000000-0000-0000-0000-000000000002\",\n        \"data_venda\": \"2025-11-01\",\n        \"dataVenda\": \"2025-11-01\",\n        \"valor_venda\": 500.0,\n        \"valor\": 500.0,\n        \"canal\": \"PADRAO\",\n        \"cod_marca\": 10,\n        \"cod_loja\": 75,\n        \"cod_cargo\": 100,\n        \"matricula\": \"MATRIC-2\",\n        \"taxa_base\": 0.025,\n        \"ignorar_vigencia\": true\n      },\n      \"contexto\": {\n        \"cenario\": \"100%\",\n        \"fator\": 1.0\n      }\n    },\n    {\n      \"id\": \"v2#80\",\n      \"venda\": {\n        \"id_venda\": \"00000000-0000-0000-0000-000000000002\",\n        \"data_venda\": \"2025-11-01\",\n        \"dataVenda\": \"2025-11-01\",\n        \"valor_venda\": 400.0,\n        \"valor\": 400.0,\n        \"canal\": \"PADRAO\",\n        \"cod_marca\": 10,\n        \"cod_loja\": 75,\n        \"cod_cargo\": 100,\n        \"matricula\": \"MATRIC-2\",\n        \"taxa_base\": 0.025,\n        \"ignorar_vigencia\": true\n      },\n      \"contexto\": {\n        \"cenario\": \"80%\",\n        \"fator\": 0.8\n      }\n    },\n    {\n      \"id\": \"v3#100\",\n      \"venda\": {\n        \"id_venda\": \"00000000-0000-0000-0000-000000000003\",\n        \"data_venda\": \"2025-11-01\",\n        \"dataVenda\": \"2025-11-01\",\n        \"valor_venda\": 900.0,\n        \"valor\": 900.0,\n        \"canal\": \"PADRAO\",\n        \"cod_marca\": 20,\n        \"cod_loja\": 12,\n        \"cod_cargo\": 100,\n        \"matricula\": \"MATRIC-3\",\n        \"taxa_base\": 0.025,\n        \"ignorar_vigencia\": true\n      },\n      \"contexto\": {\n        \"cenario\": \"100%\",\n        \"fator\": 1.0\n      }\n    }\n  ]\n}"
+            }
+          },
+          "description": "Formato exato do SimulacaoPythonOrquestradorService. Esperado 200, sucesso=true, motor PYTHON_SANDBOX: v1#100 = 42.00 (regra 1, taxa_base + 1 p.p.), v1#80 = 33.80 (regra 2), v3#100 aplicada=false (backend usa a taxa contratual). assinaturaPrograma = sha256 do código (igual ao checksum do BACK-9)."
+        },
+        {
+          "name": "Executar programa — erro em um item → 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "{{authHeader}}",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v2/executar-programa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigoFonte\": \"def calcular_comissao(venda):\\n    return 10 / venda['divisor']\\n\",\n  \"contexto\": {\n    \"modo\": \"APURACAO\",\n    \"campanhaId\": 42\n  },\n  \"itens\": [\n    {\n      \"id\": \"ok\",\n      \"venda\": {\n        \"divisor\": 2\n      }\n    },\n    {\n      \"id\": \"quebra\",\n      \"venda\": {\n        \"divisor\": 0\n      }\n    }\n  ]\n}"
+            }
+          },
+          "description": "Fail-closed: 422, sucesso=false, error_code PROGRAMA_FALHOU, erro ERRO_CODIGO, detalhe cita o item 'quebra' e ZeroDivisionError; resultados=null (sem parcial)."
+        },
+        {
+          "name": "Executar programa — código proibido → 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "{{authHeader}}",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v2/executar-programa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigoFonte\": \"import os\\n\\ndef calcular_comissao(venda):\\n    return os.getpid()\\n\",\n  \"itens\": [\n    {\n      \"id\": \"a\",\n      \"venda\": {}\n    }\n  ]\n}"
+            }
+          },
+          "description": "422, error_code PROGRAMA_REJEITADO, erro VALIDACAO, violacoes[] com o import proibido. Nada é executado."
+        }
+      ]
     }
   ]
 }

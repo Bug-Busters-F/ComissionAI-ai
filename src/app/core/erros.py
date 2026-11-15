@@ -31,7 +31,13 @@ CATALOGO: dict[str, ErroCatalogado] = {
         422, "Requisição inválida.", "Corrigir o payload conforme `erros[]`. Não repetir igual."),
     "NAO_ENCONTRADO": ErroCatalogado(404, "Recurso não encontrado.", "Conferir a rota ou a assinatura."),
     "VOLUME_EXCEDIDO": ErroCatalogado(
-        413, "Volume acima do limite configurado.", "Reduzir o recorte ou ajustar o limite (ANOMALIA_MAX_VENDAS)."),
+        413, "Volume acima do limite configurado.", "Reduzir o recorte ou ajustar o limite (ANOMALIA_MAX_VENDAS, EXEC_MAX_ITENS)."),
+    "PROGRAMA_REJEITADO": ErroCatalogado(
+        422, "Programa Python rejeitado pela análise estática.",
+        "Corrigir o programa (ver `violacoes`) e reaprovar. Não repetir igual."),
+    "PROGRAMA_FALHOU": ErroCatalogado(
+        422, "O programa Python falhou durante a execução no sandbox.",
+        "Ver `erro`/`detalhe` (item, exceção, limite de tempo ou memória). Nenhum resultado parcial é devolvido."),
     "METODO_NAO_PERMITIDO": ErroCatalogado(405, "Método HTTP não permitido.", "Conferir o método da rota."),
     "LLM_AUTH_ERROR": ErroCatalogado(401, "Falha de autenticação no provedor de LLM.", "Conferir LLM_API_KEY."),
     "LLM_RATE_LIMIT_ERROR": ErroCatalogado(

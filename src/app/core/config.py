@@ -47,6 +47,16 @@ class Settings(BaseSettings):
     sim_max_code_bytes: int = 8192
     sim_dir_programas: str = "data/programas_gerados"
 
+    # --- Execução do programa aprovado no backend (/api/v2/executar-programa, IA-10 / BACK-9) ---
+    # Itens = vendas × cenários (simulação manda 4 por venda). O tempo precisa caber no AI_READ_TIMEOUT (60 s).
+    # O programa vem do backend com regras embutidas no código, por isso o limite de tamanho é maior que o do
+    # código gerado pelo LLM; a análise estática por lista de permissão é a mesma.
+    exec_max_itens: int = Field(default=200000, ge=1)
+    exec_max_seconds: float = Field(default=30.0, gt=0, le=120)
+    exec_max_output_kb: int = Field(default=16384, ge=64)
+    exec_max_code_lines: int = Field(default=1000, ge=10)
+    exec_max_code_bytes: int = Field(default=131072, ge=1024)
+
     # --- Calibração (IA-6): reexecuções por cenário e tempo total da requisição ---
     # O tempo total precisa caber no read-timeout do backend (AI_READ_TIMEOUT, 60 s) junto com a simulação.
     calib_max_tentativas: int = Field(default=12, ge=2, le=30)

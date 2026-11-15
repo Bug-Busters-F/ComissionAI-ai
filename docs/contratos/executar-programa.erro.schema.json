@@ -1,0 +1,264 @@
+{
+  "$defs": {
+    "ContextoExecucao": {
+      "additionalProperties": true,
+      "description": "Identificadores do backend; a IA só registra e devolve (não autentica usuários).",
+      "properties": {
+        "campanhaId": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Campanhaid"
+        },
+        "competencia": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Competencia"
+        },
+        "dataFim": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Datafim"
+        },
+        "dataInicio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Datainicio"
+        },
+        "execucaoId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Execucaoid"
+        },
+        "modo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "SIMULACAO ou APURACAO.",
+          "title": "Modo"
+        },
+        "usuarioSolicitanteId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usuariosolicitanteid"
+        },
+        "versaoCampanha": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Versaocampanha"
+        },
+        "versaoProgramaPython": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Versaoprogramapython"
+        }
+      },
+      "title": "ContextoExecucao",
+      "type": "object"
+    },
+    "ResultadoItem": {
+      "properties": {
+        "aplicada": {
+          "description": "false = o programa devolveu None (nenhuma regra aplicada).",
+          "title": "Aplicada",
+          "type": "boolean"
+        },
+        "comissao": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Escala 2, HALF_UP; null quando não aplicada.",
+          "title": "Comissao"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "aplicada"
+      ],
+      "title": "ResultadoItem",
+      "type": "object"
+    }
+  },
+  "description": "Corpo das respostas 422 da rota: o formato acima mais `detail`/`error_code` do catálogo (IA-10).",
+  "properties": {
+    "assinaturaPrograma": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "sha256 do código executado (mesmo cálculo do checksum do BACK-9).",
+      "title": "Assinaturaprograma"
+    },
+    "contexto": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ContextoExecucao"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "detail": {
+      "title": "Detail",
+      "type": "string"
+    },
+    "detalhe": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Detalhe"
+    },
+    "erro": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Tipo da falha: VALIDACAO, TIMEOUT, ERRO_CODIGO etc.",
+      "title": "Erro"
+    },
+    "error_code": {
+      "title": "Error Code",
+      "type": "string"
+    },
+    "motor": {
+      "default": "PYTHON_SANDBOX",
+      "title": "Motor",
+      "type": "string"
+    },
+    "resultados": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/ResultadoItem"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Resultados"
+    },
+    "sucesso": {
+      "const": false,
+      "default": false,
+      "title": "Sucesso",
+      "type": "boolean"
+    },
+    "totalItens": {
+      "default": 0,
+      "title": "Totalitens",
+      "type": "integer"
+    },
+    "violacoes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Violacoes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "detail",
+    "error_code"
+  ],
+  "title": "ExecutarProgramaErro",
+  "type": "object"
+}

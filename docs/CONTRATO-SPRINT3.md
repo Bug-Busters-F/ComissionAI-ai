@@ -16,7 +16,7 @@ Integração backend (Spring) → IA (FastAPI) para geração e execução do pr
 | Cabeçalho | Sentido | Regra |
 |---|---|---|
 | `X-Internal-Api-Key` (nome em `AI_SERVICE_AUTH_HEADER`) | backend → IA | **Obrigatório em todas as rotas**, exceto `/health`, `/docs`, `/redoc` e `/openapi.json`. É a **mesma** `AI_SERVICE_API_KEY` que o backend já envia no `AiServiceClient` e que a IA usa para consultar o backend. A comparação é em tempo constante e o valor nunca é logado |
-| `X-Correlation-Id` | ida e volta | Opcional na ida (`[A-Za-z0-9._:-]{1,128}`); ausente ou inválido, a IA gera um. Sempre devolvido na resposta e presente em toda linha de log da requisição (`[id]`) |
+| `X-Correlation-Id` | ida e volta | Opcional na ida (`[A-Za-z0-9._:-]{1,128}`); ausente ou inválido, a IA gera um. Sempre devolvido na resposta e presente em toda linha de log da requisição (`[id]`). O `AiServiceClient` envia um UUID em **todas** as chamadas (ou o `correlationId` do MDC, se existir) e registra `Chamada ao serviço de IA <rota> com X-Correlation-Id=<id>` |
 
 A IA **não autentica usuários** e não tem cadastro próprio. Ela confia apenas no backend, pela chave interna, e registra o `usuarioSolicitanteId` que o backend repassa.
 
@@ -27,7 +27,7 @@ A IA **não autentica usuários** e não tem cadastro próprio. Ela confia apena
 
 ## 2. Identificadores (`contexto`)
 
-Aceito em `/gerar-programa`, `/simular` e `/anomalias/analisar`, e devolvido em `contexto` na resposta:
+Aceito em `/gerar-programa`, `/simular` e `/anomalias/analisar`, e devolvido em `contexto` na resposta (o `/executar-programa` usa o `contexto` que o backend já envia, ver §3):
 
 ```json
 {"campanhaId": "42", "revisao": 3, "execucaoId": "exec-9f1", "usuarioSolicitanteId": "user-7", "versaoPrograma": "prog-v2"}
@@ -91,6 +91,52 @@ Gera e valida o programa **antes** da revisão técnica. Devolve `origem` (`TEMP
   - `alertas[]` com valor observado, faixa esperada, grupo, amostra e evidência;
   - `grupos[]`, `errosCarga[]`, `cobertura` e `explicacao`.
 - **Limite:** até `ANOMALIA_MAX_VENDAS` (200 mil) vendas; acima disso, 413.
+- **Id do alerta:** de negócio (competência + grupo + matrícula + dia), igual entre reanálises; a versão dos dados fica em `versaoDados`.
+
+### `POST /api/v2/executar-programa` (IA-10; produtor do código: BACK-9; consumidores: BACK-11 e apuração definitiva)
+
+Contrato que o backend **já usa** no `AiServiceClient.executarProgramaPython` (`SimulacaoPythonOrquestradorService` e `CampanhaApuracaoService`). O backend gera e aprova `calcular_comissao(venda)` com as regras no código e consolida cenários e apuração em Java; a IA só executa o programa no sandbox, uma vez por item.
+
+**Entrada** (campos extras ignorados):
+
+```json
+{
+  "codigoFonte": "from decimal import Decimal, ROUND_HALF_UP\n\ndef calcular_comissao(venda: dict) -> float | None: ...",
+  "contexto": {"modo": "SIMULACAO", "campanhaId": 42, "versaoCampanha": 3, "versaoProgramaPython": 2, "competencia": "2025-11"},
+  "itens": [
+    {"id": "<idVenda>#100", "venda": {"id_venda": "...", "data_venda": "2025-11-01", "valor_venda": 1200.0, "valor": 1200.0,
+     "canal": "PADRAO", "cod_marca": 10, "cod_loja": 75, "cod_cargo": 100, "matricula": "MATRIC-1",
+     "taxa_base": 0.025, "ignorar_vigencia": true}, "contexto": {"cenario": "100%", "fator": 1.0}}
+  ]
+}
+```
+
+- `calcular_comissao(venda)` ou `calcular_comissao(venda, contexto)`; o 2º argumento recebe o `contexto` do item (ou `{}`).
+- A venda chega como o `montarVendaParaPython` serializa, sem conversão. Ids de item devem ser únicos (422 se repetidos).
+- O código passa pela mesma análise estática por lista de permissão do `/simular` (imports, builtins, construções), com limite de tamanho próprio (`EXEC_MAX_CODE_LINES`/`EXEC_MAX_CODE_BYTES`), porque o programa do backend traz as regras embutidas.
+
+**Saída 200:**
+
+```json
+{"sucesso": true, "motor": "PYTHON_SANDBOX", "totalItens": 9,
+ "resultados": [{"id": "<idVenda>#100", "aplicada": true, "comissao": "42.00"}, {"id": "...", "aplicada": false, "comissao": null}],
+ "erro": null, "detalhe": null, "violacoes": [], "assinaturaPrograma": "<sha256>", "contexto": {"modo": "SIMULACAO"}}
+```
+
+- `aplicada = false` quando o programa devolve `None` (nenhuma regra): o backend aplica a taxa contratual.
+- `comissao` em texto, escala 2, HALF_UP. Retorno que não seja número/`None`, negativo ou não finito é falha.
+- `assinaturaPrograma` = sha256 do `codigoFonte`, mesmo cálculo de `CampanhaProgramaPython.calcularChecksum` (BACK-9).
+- Lote vazio (`itens: []`) responde 200 com `resultados: []`: o backend chama assim quando nenhuma venda é calculável.
+
+**Falhas (fail-closed, sem resultado parcial):** 422 com o corpo acima (`sucesso: false`, `resultados: null`) mais `detail` e `error_code`. O backend lê `detalhe`/`detail` e `violacoes` e lança `BusinessException`.
+
+| `error_code` | `erro` | Quando |
+|---|---|---|
+| `PROGRAMA_REJEITADO` | `VALIDACAO` | Sintaxe, import/builtin proibido, função ausente ou assinatura errada |
+| `PROGRAMA_FALHOU` | `ERRO_CODIGO` | Exceção em um item (`detalhe` cita o id do item) |
+| `PROGRAMA_FALHOU` | `TIMEOUT`, `MEMORIA`, `VIOLACAO`, `SAIDA_EXCESSIVA`, `SAIDA_INVALIDA` | Limites do sandbox ou retorno inválido |
+
+Acima de `EXEC_MAX_ITENS` (200 mil itens = 50 mil vendas × 4 cenários): 413 `VOLUME_EXCEDIDO`.
 
 ## 4. Erros
 
@@ -103,7 +149,9 @@ Todo erro HTTP tem o corpo `{"detail": "...", "error_code": "..."}` e traz `X-Co
 | `VALIDACAO_ENTRADA` | 422 | Payload inválido (ver `erros[]`). Não repetir igual |
 | `NAO_ENCONTRADO` | 404 | Rota ou assinatura de programa inexistente |
 | `METODO_NAO_PERMITIDO` | 405 | Método errado |
-| `VOLUME_EXCEDIDO` | 413 | Recorte acima do limite configurado |
+| `VOLUME_EXCEDIDO` | 413 | Recorte acima do limite configurado (`ANOMALIA_MAX_VENDAS`, `EXEC_MAX_ITENS`) |
+| `PROGRAMA_REJEITADO` | 422 | `/executar-programa`: programa recusado pela análise estática. Corrigir e reaprovar |
+| `PROGRAMA_FALHOU` | 422 | `/executar-programa`: erro em um item, limite de tempo/memória ou retorno inválido. Sem resultado parcial |
 | `LLM_AUTH_ERROR` | 401 | Chave do provedor de LLM inválida (só rotas que usam LLM) |
 | `LLM_RATE_LIMIT_ERROR` | 429 | Respeitar `Retry-After` |
 | `LLM_TIMEOUT_ERROR` | 504 | Tentar mais tarde |
@@ -128,6 +176,7 @@ Todo erro HTTP tem o corpo `{"detail": "...", "error_code": "..."}` e traz `X-Co
 | Consulta IA → backend | `TOOL_TIMEOUT_SECONDS` | 5 s | |
 | Execução no sandbox (cada) | `SIM_MAX_SECONDS` | 10 s | |
 | Calibração (requisição inteira) | `CALIB_MAX_SEGUNDOS` | 20 s | Conferido antes de cada reexecução: pior caso ≈ 20 + 10 s |
+| Execução do programa aprovado | `EXEC_MAX_SECONDS` | 30 s | Uma execução por chamada; 20 mil itens (5 mil vendas × 4 cenários) em ≈ 0,6 s |
 | Anomalias | — | < 1 s para 30 mil vendas | Sem LLM nem sandbox |
 
 **Pior caso de `/simular`:**
@@ -147,29 +196,40 @@ Medições:
 
 ## 6. Integração com o backend
 
-**BACK-11 (Davi)** — na branch `feat/versionar-programa-python`, o `SimulacaoPythonOrquestradorService` ainda executa o cálculo Java e só grava o motor `PYTHON_XAI_SANDBOX`. Para usar a IA, o `AiServiceClient` precisa de:
+Situação do `dev` do backend em 15/11/2026 (PR #34, BACK-9/BACK-11 mergeados):
 
-1. `gerarProgramaV2(payload)` → `POST /api/v2/gerar-programa`;
-2. `simularV2(payload)` → `POST /api/v2/simular`, montando o payload a partir do `RecortePopulacaoIaResponse` conforme a tabela do §3;
-3. `analisarAnomaliasV2(payload)` → `POST /api/v2/anomalias/analisar` (consumidor: BACK-12);
-4. enviar `X-Correlation-Id` (por exemplo, o id da requisição do backend) e o `contexto` com `execucaoId` e `usuarioSolicitanteId`;
-5. persistir `assinaturaPrograma`, `versaoFontes.recorte` e `contexto` da resposta junto com a execução.
+| Fluxo do backend | Rota da IA | Situação |
+|---|---|---|
+| Simulação dos 4 cenários (`SimulacaoPythonOrquestradorService`) e apuração definitiva (`CampanhaApuracaoService`) | `POST /api/v2/executar-programa` | **Atendido por esta entrega.** O backend gera o programa, consolida os cenários em Java e só pede à IA a comissão de cada item |
+| Calibração e explicações (IA-6/IA-7) para o FRONT-8 | `POST /api/v2/simular` com `calibrar=true` | Método `AiServiceClient.simularV2` pronto; falta o BACK-11 chamá-lo (Davi) |
+| Anomalias para o FRONT-6 (IA-8) | `POST /api/v2/anomalias/analisar` | Método `AiServiceClient.analisarAnomaliasV2` pronto; a branch `feat/anomaly-analysis` (Ygor) ainda calcula z-score em Java |
+| Geração do programa pela IA (IA-2) | `POST /api/v2/gerar-programa` | Método `AiServiceClient.gerarProgramaV2` pronto; hoje o BACK-9 gera o código em Java |
 
-Os métodos `postarV2` atuais já enviam a chave e tratam timeout e indisponibilidade. Basta reutilizá-los.
+**O que mudou no backend nesta entrega** (branch `feature/ia10-cliente-ia-correlacao`, só no `AiServiceClient`, sem alterar o comportamento dos fluxos existentes):
 
-**Compatibilidade verificada** (`tests/test_contrato_sprint3.py`):
+1. `X-Correlation-Id` em todas as chamadas à IA, com log do id e da rota;
+2. `gerarProgramaV2`, `simularV2` e `analisarAnomaliasV2`, com a mesma chave interna e o mesmo tratamento de indisponibilidade e timeout; um 4xx da IA (payload inválido, volume acima do limite) vira `BusinessException` com a mensagem da IA;
+3. rotas configuráveis: `ai.service.v2.gerar-programa-endpoint`, `ai.service.v2.simular-endpoint`, `ai.service.v2.anomalias-endpoint`;
+4. `AiServiceClientContratoIaTest` cobre rotas, cabeçalhos, 4xx/5xx e a resposta do `executar-programa` com os campos extras da IA.
 
-- o payload com **todos** os campos de `VendaRecorteIaDTO`, `ColaboradorRhRecorteIaDTO`, `TaxaContratualRecorteIaDTO`, `PendenciaAceitaRecorteIaDTO` e `VersoesFontesRecorteIaDTO` (como o Jackson serializa) é aceito pelas duas rotas;
-- os identificadores e hashes voltam na resposta.
+**Para o IA-6/IA-7 chegarem à tela (BACK-11):** o programa do backend tem as regras escritas no código, então a calibração não consegue reexecutá-lo com parâmetros alterados. O caminho é o BACK-11 chamar `simularV2` com as regras da proposta, o recorte do BACK-10 (`vendas`, `taxasContratuais`, `pendenciasAceitas`, `versoesFontes`), `orcamento`, `periodoCampanha` e `calibrar=true`, e persistir `calibracoes[]`, `explicacoes[]`, `assinaturaPrograma`, `versaoFontes.recorte` e `contexto` junto com a execução.
+
+**Para o IA-8 chegar à tela (BACK-12):** chamar `analisarAnomaliasV2` com `competencia`, `vendas` e `dadosRh` do recorte e persistir `alertas[]` pelo `id` (estável entre reanálises), `versaoDados` e `metodo`.
+
+**Compatibilidade verificada:**
+
+- `tests/test_contrato_sprint3.py`: o payload com **todos** os campos de `VendaRecorteIaDTO`, `ColaboradorRhRecorteIaDTO`, `TaxaContratualRecorteIaDTO`, `PendenciaAceitaRecorteIaDTO` e `VersoesFontesRecorteIaDTO` (como o Jackson serializa) é aceito por `/simular` e `/anomalias/analisar`, e os identificadores e hashes voltam na resposta;
+- `tests/test_executar_programa.py`: programa no formato exato do `gerarCodigoConsolidado` e itens no formato do `montarVendaParaPython`, nos modos `SIMULACAO` (4 itens por venda) e `APURACAO` (vigência respeitada), lote vazio, falhas e limites.
 
 ## 7. Roteiro de demonstração (bases do IA-9)
 
 1. Gerar as bases limpas: `python scripts/bases_limpas/gerar.py --origem "../Base Dom Rock" --destino data/bases_limpas`. Importá-las no backend.
-2. **4 cenários com orçamento:** requisição "Simular — 4 cenários com orçamento" da coleção, ou uma campanha real pelo backend.
-3. **Cenário excedido com sugestão:** `calibrar: true`. Espera-se `SUGESTAO_VALIDADA` com parâmetros antes/depois.
-4. **Sem sugestão viável:** orçamento abaixo da parcela contratual. Espera-se `SEM_SOLUCAO_VIAVEL`.
-5. **Anomalias** de JUL/25 a partir do recorte: MATRIC-141 aparece como alerta.
-6. **Falhas:**
+2. **Simulação e apuração pelo backend:** aprovar o programa Python da campanha (BACK-9) e rodar a simulação Python (BACK-11). As chamadas chegam em `/api/v2/executar-programa` com o mesmo `X-Correlation-Id` nos logs dos dois lados. Na coleção: pasta "executar-programa".
+3. **4 cenários com orçamento:** requisição "Simular — 4 cenários com orçamento" da coleção, ou uma campanha real pelo backend.
+4. **Cenário excedido com sugestão:** `calibrar: true`. Espera-se `SUGESTAO_VALIDADA` com parâmetros antes/depois.
+5. **Sem sugestão viável:** orçamento abaixo da parcela contratual. Espera-se `SEM_SOLUCAO_VIAVEL`.
+6. **Anomalias** de JUL/25 a partir do recorte: MATRIC-141 aparece como alerta.
+7. **Falhas:**
    - IA parada → `AiServiceUnavailableException`;
    - `AI_READ_TIMEOUT` baixo → `AiTimeoutException`;
    - chave diferente → 401 `CHAVE_INTERNA_INVALIDA`.
