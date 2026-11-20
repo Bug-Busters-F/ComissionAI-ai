@@ -4,14 +4,21 @@ atualização de artefatos após edição manual (IA-6/IA-7). O contrato é vali
 e documentado no Swagger.
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 
 from app.core.agente import AgenteInterpretador
 from app.core.agente.hooks import HooksAjusteSobreBase
+from app.core.anomalias import servico as anomalias
 from app.core.services.artefatos import ServicoArtefatos
 from app.core.services.reinterpretador import ServicoReinterpretacao
+from app.core.simulacao import execucao_programa
 from app.core.simulacao.servico import ServicoSimulacao
 from app.providers import get_provider
+from app.schemas.anomalia import AnalisarAnomaliasRequest, AnalisarAnomaliasResponse
+from app.schemas.execucao import ExecutarProgramaErro, ExecutarProgramaRequest, ExecutarProgramaResponse
 from app.schemas.proposta import (
     AtualizarArtefatosRequest,
     AtualizarArtefatosResponse,
@@ -28,6 +35,13 @@ from app.schemas.proposta import (
 from app.tools import criar_registry
 
 router = APIRouter(prefix="/api/v2", tags=["v2"])
+logger = logging.getLogger(__name__)
+
+
+def _registrar(rota: str, contexto) -> None:
+    """IA-10: identificadores no log (o X-Correlation-Id entra pelo filtro de logging)."""
+    logger.info("%s campanha=%s revisao=%s execucao=%s usuario=%s programa=%s", rota, contexto.campanhaId,
+                contexto.revisao, contexto.execucaoId, contexto.usuarioSolicitanteId, contexto.versaoPrograma)
 
 def get_agente() -> AgenteInterpretador:
     """Fábrica injetável (os testes substituem por um agente com LLM e backend falsos)."""
@@ -51,7 +65,10 @@ def gerar_programa(
     uma assinatura que identifica a versão aprovada. `/simular` pode então executar exatamente esse código
     via `codigoAprovado`/`assinaturaPrograma`, sem reinventá-lo a cada clique em simular.
     """
-    return servico.gerar_programa(request)
+    _registrar("gerar-programa", request.contexto)
+    resposta = servico.gerar_programa(request)
+    resposta.contexto = request.contexto
+    return resposta
 
 
 @router.get(
@@ -85,7 +102,10 @@ def simular(request: SimularRequest, servico: ServicoSimulacao = Depends(get_sim
     Aceita `vendas` (recorte já resolvido pelo backend, BACK-10) como única fonte de dados quando informado,
     e `codigoAprovado`/`assinaturaPrograma` (de /gerar-programa, IA-2) para executar sem regerar o código.
     """
-    return servico.simular(request)
+    _registrar("simular", request.contexto)
+    resposta = servico.simular(request)
+    resposta.contexto = request.contexto
+    return resposta
 
 
 @router.post(
@@ -132,3 +152,44 @@ def atualizar_artefatos(
     servico: ServicoArtefatos = Depends(get_artefatos),
 ) -> AtualizarArtefatosResponse:
     return servico.atualizar(request)
+
+
+@router.post(
+    "/anomalias/analisar",
+    summary="Detectar anomalias diárias de vendas por grupo comparável (IA-8)",
+    response_model=AnalisarAnomaliasResponse,
+)
+def analisar_anomalias(request: AnalisarAnomaliasRequest) -> AnalisarAnomaliasResponse:
+    """
+    Agrega as vendas por colaborador/dia, compara cada total com o grupo de mesma marca e cargo (IQR de
+    Tukey) e devolve os totais fora da faixa como indícios para conferência. Não usa LLM e não altera vendas.
+    """
+    _registrar("anomalias", request.contexto)
+    try:
+        return anomalias.analisar(request)
+    except anomalias.VolumeExcedido as e:
+        raise HTTPException(status_code=413, detail=str(e)) from e
+
+
+@router.post(
+    "/executar-programa",
+    summary="Executar o programa Python aprovado no backend, item a item, no sandbox (IA-10 / BACK-9)",
+    response_model=ExecutarProgramaResponse,
+    responses={422: {"model": ExecutarProgramaErro, "description": "Programa rejeitado ou falha na execução."},
+               413: {"description": "Itens acima de EXEC_MAX_ITENS."}},
+)
+def executar_programa(request: ExecutarProgramaRequest):
+    """
+    Contrato usado pelo `AiServiceClient.executarProgramaPython` do backend: `calcular_comissao(venda)` (ou
+    `(venda, contexto)`) roda uma vez por item; `aplicada=false` quando o programa devolve None. Não usa LLM.
+    Falha em qualquer item -> 422 sem resultados parciais (`sucesso=false`, `erro`, `detalhe`, `violacoes`).
+    """
+    c = request.contexto
+    logger.info("executar-programa modo=%s campanha=%s versao=%s programa=%s itens=%d", c.modo, c.campanhaId,
+                c.versaoCampanha, c.versaoProgramaPython, len(request.itens))
+    try:
+        return execucao_programa.executar(request)
+    except execucao_programa.VolumeExcedido as e:
+        raise HTTPException(status_code=413, detail=str(e)) from e
+    except execucao_programa.FalhaExecucao as e:
+        return JSONResponse(status_code=422, content=e.corpo())

@@ -1,0 +1,317 @@
+{
+  "$defs": {
+    "ColaboradorRh": {
+      "properties": {
+        "codCargo": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Codcargo"
+        },
+        "codLoja": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Codloja"
+        },
+        "descriCargo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Descricargo"
+        },
+        "matricula": {
+          "title": "Matricula",
+          "type": "string"
+        }
+      },
+      "required": [
+        "matricula"
+      ],
+      "title": "ColaboradorRh",
+      "type": "object"
+    },
+    "ContextoProposta": {
+      "description": "Identifica de onde vem o pedido. Todos os ids são opacos para a IA.",
+      "properties": {
+        "campanhaId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Campanhaid"
+        },
+        "execucaoId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Id da execução no backend; devolvido em cada explicação (IA-7).",
+          "title": "Execucaoid"
+        },
+        "origem": {
+          "default": "NOVA",
+          "enum": [
+            "NOVA",
+            "VERSAO_EXISTENTE"
+          ],
+          "title": "Origem",
+          "type": "string"
+        },
+        "revisao": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revisao"
+        },
+        "substituiVersao": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Substituiversao"
+        },
+        "usuarioSolicitanteId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usuariosolicitanteid"
+        },
+        "versaoPrograma": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Versão do programa aprovada no backend (BACK-9); a IA devolve também a assinatura.",
+          "title": "Versaoprograma"
+        }
+      },
+      "title": "ContextoProposta",
+      "type": "object"
+    },
+    "ParametrosAnomalia": {
+      "description": "Ausentes = padrões do serviço (`ANOMALIA_K`, `ANOMALIA_AMOSTRA_MINIMA`); os efetivos voltam em `metodo`.",
+      "properties": {
+        "amostraMinima": {
+          "anyOf": [
+            {
+              "maximum": 1000,
+              "minimum": 4,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Observações mínimas (colaborador/dia) para avaliar um grupo.",
+          "title": "Amostraminima"
+        },
+        "k": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "maximum": 10.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Multiplicador do IQR (Tukey: 1,5).",
+          "title": "K"
+        }
+      },
+      "title": "ParametrosAnomalia",
+      "type": "object"
+    },
+    "VendaAnomalia": {
+      "properties": {
+        "codCargo": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Cargo do RH; se ausente, vem de `dadosRh`.",
+          "title": "Codcargo"
+        },
+        "codLoja": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Codloja"
+        },
+        "codMarca": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Codmarca"
+        },
+        "dataVenda": {
+          "format": "date",
+          "title": "Datavenda",
+          "type": "string"
+        },
+        "descriCargo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Descricargo"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "matricula": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Matricula"
+        },
+        "valorVenda": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Valorvenda"
+        }
+      },
+      "required": [
+        "id",
+        "valorVenda",
+        "dataVenda"
+      ],
+      "title": "VendaAnomalia",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "competencia": {
+      "pattern": "^\\d{4}-\\d{2}$",
+      "title": "Competencia",
+      "type": "string"
+    },
+    "contexto": {
+      "$ref": "#/$defs/ContextoProposta"
+    },
+    "dadosRh": {
+      "description": "RH da competência. Quando informado, é a referência: venda de matrícula ausente é erro de carga.",
+      "items": {
+        "$ref": "#/$defs/ColaboradorRh"
+      },
+      "title": "Dadosrh",
+      "type": "array"
+    },
+    "parametros": {
+      "$ref": "#/$defs/ParametrosAnomalia"
+    },
+    "vendas": {
+      "items": {
+        "$ref": "#/$defs/VendaAnomalia"
+      },
+      "title": "Vendas",
+      "type": "array"
+    },
+    "versaoFontes": {
+      "additionalProperties": true,
+      "description": "Hashes do recorte (BACK-10, `versoesFontes`), ecoados.",
+      "title": "Versaofontes",
+      "type": "object"
+    }
+  },
+  "required": [
+    "competencia",
+    "vendas"
+  ],
+  "title": "AnalisarAnomaliasRequest",
+  "type": "object"
+}

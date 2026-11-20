@@ -1,0 +1,1090 @@
+{
+  "$defs": {
+    "AlteracaoParametro": {
+      "description": "Parâmetro de regra alterado por uma alternativa de calibração (para o usuário aplicar ao rascunho).",
+      "properties": {
+        "antes": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Antes",
+          "type": "string"
+        },
+        "campo": {
+          "enum": [
+            "taxa",
+            "bonus.percentual",
+            "bonus.valorFixo"
+          ],
+          "title": "Campo",
+          "type": "string"
+        },
+        "depois": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Depois",
+          "type": "string"
+        },
+        "idLocal": {
+          "title": "Idlocal",
+          "type": "string"
+        }
+      },
+      "required": [
+        "idLocal",
+        "campo",
+        "antes",
+        "depois"
+      ],
+      "title": "AlteracaoParametro",
+      "type": "object"
+    },
+    "Calibracao": {
+      "description": "Alternativa de ajuste para UM cenário (IA-6). Independente das alternativas dos outros cenários.",
+      "properties": {
+        "alteracoes": {
+          "items": {
+            "$ref": "#/$defs/AlteracaoParametro"
+          },
+          "title": "Alteracoes",
+          "type": "array"
+        },
+        "assinaturaPrograma": {
+          "title": "Assinaturaprograma",
+          "type": "string"
+        },
+        "cenario": {
+          "title": "Cenario",
+          "type": "string"
+        },
+        "custoProjetadoMinimo": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Custo com os parâmetros no mínimo (só em SEM_SOLUCAO_VIAVEL).",
+          "title": "Custoprojetadominimo"
+        },
+        "custoProjetadoOriginal": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Custoprojetadooriginal"
+        },
+        "custoProjetadoRecalculado": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Custo projetado obtido REEXECUTANDO o programa com os parâmetros alterados.",
+          "title": "Custoprojetadorecalculado"
+        },
+        "custoPropostoRecalculado": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Custopropostorecalculado"
+        },
+        "fatorAjuste": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Fator aplicado a taxas e bônus (0 < λ ≤ 1).",
+          "title": "Fatorajuste"
+        },
+        "folga": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Orçamento − custo projetado recalculado.",
+          "title": "Folga"
+        },
+        "motivo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Motivo"
+        },
+        "multiplicadorVendas": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Multiplicadorvendas",
+          "type": "string"
+        },
+        "orcamento": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Orcamento",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "ENQUADRADA",
+            "SEM_SOLUCAO_VIAVEL",
+            "NAO_NECESSARIA",
+            "FALHA"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tentativas": {
+          "description": "Reexecuções do programa usadas nesta busca.",
+          "title": "Tentativas",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cenario",
+        "multiplicadorVendas",
+        "status",
+        "orcamento",
+        "tentativas",
+        "assinaturaPrograma"
+      ],
+      "title": "Calibracao",
+      "type": "object"
+    },
+    "CodigoPendencia": {
+      "description": "Catálogo fechado de pendências.",
+      "enum": [
+        "CAMPO_AUSENTE",
+        "AMBIGUIDADE_CARGO",
+        "AMBIGUIDADE_PUBLICO",
+        "CADASTRO_INEXISTENTE",
+        "MATRICULA_INVALIDA",
+        "CRITERIO_NAO_SUPORTADO",
+        "TRECHO_INCOMPLETO",
+        "VIGENCIA_INCOMPATIVEL",
+        "BASE_AUSENTE",
+        "CONFLITO_REGRA",
+        "TOOL_FALHA",
+        "LIMITE_AGENTE_ATINGIDO",
+        "TAXA_INVALIDA",
+        "SIMULACAO_NAO_VALIDADA",
+        "NAO_SUPORTADO_NA_APURACAO"
+      ],
+      "title": "CodigoPendencia",
+      "type": "string"
+    },
+    "ContextoProposta": {
+      "description": "Identifica de onde vem o pedido. Todos os ids são opacos para a IA.",
+      "properties": {
+        "campanhaId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Campanhaid"
+        },
+        "execucaoId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Id da execução no backend; devolvido em cada explicação (IA-7).",
+          "title": "Execucaoid"
+        },
+        "origem": {
+          "default": "NOVA",
+          "enum": [
+            "NOVA",
+            "VERSAO_EXISTENTE"
+          ],
+          "title": "Origem",
+          "type": "string"
+        },
+        "revisao": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revisao"
+        },
+        "substituiVersao": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Substituiversao"
+        },
+        "usuarioSolicitanteId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usuariosolicitanteid"
+        },
+        "versaoPrograma": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Versão do programa aprovada no backend (BACK-9); a IA devolve também a assinatura.",
+          "title": "Versaoprograma"
+        }
+      },
+      "title": "ContextoProposta",
+      "type": "object"
+    },
+    "EnquadramentoCenario": {
+      "description": "Mesmos nomes de `EnquadramentoOrcamentoCenarioDTO` do backend (BACK-8).",
+      "properties": {
+        "cenario": {
+          "title": "Cenario",
+          "type": "string"
+        },
+        "custoTotalProjetado": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Custototalprojetado",
+          "type": "string"
+        },
+        "deltaProjetado": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Deltaprojetado"
+        },
+        "dentroDoOrcamento": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dentrodoorcamento"
+        },
+        "excedenteOrcamento": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Excedenteorcamento"
+        },
+        "multiplicadorVolume": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Multiplicadorvolume",
+          "type": "string"
+        },
+        "orcamentoTeto": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Orcamentoteto"
+        },
+        "percentualUsoOrcamento": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Percentualusoorcamento"
+        },
+        "saldoOrcamento": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Saldoorcamento"
+        },
+        "statusEnquadramento": {
+          "enum": [
+            "ENQUADRADO",
+            "ACIMA_DO_TETO",
+            "NAO_APLICAVEL"
+          ],
+          "title": "Statusenquadramento",
+          "type": "string"
+        },
+        "totalVendasEscopo": {
+          "title": "Totalvendasescopo",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cenario",
+        "multiplicadorVolume",
+        "totalVendasEscopo",
+        "custoTotalProjetado",
+        "statusEnquadramento"
+      ],
+      "title": "EnquadramentoCenario",
+      "type": "object"
+    },
+    "EvidenciaTool": {
+      "description": "Registro rastreável de uma consulta/execução do agente.",
+      "properties": {
+        "argumentos": {
+          "additionalProperties": true,
+          "title": "Argumentos",
+          "type": "object"
+        },
+        "blocosAfetados": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Blocosafetados",
+          "type": "array"
+        },
+        "duracaoMs": {
+          "default": 0,
+          "title": "Duracaoms",
+          "type": "integer"
+        },
+        "ferramenta": {
+          "title": "Ferramenta",
+          "type": "string"
+        },
+        "passo": {
+          "default": 0,
+          "title": "Passo",
+          "type": "integer"
+        },
+        "resumo": {
+          "default": "",
+          "title": "Resumo",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "OK",
+            "SEM_DADOS",
+            "AMBIGUO",
+            "FALHA"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ferramenta",
+        "status"
+      ],
+      "title": "EvidenciaTool",
+      "type": "object"
+    },
+    "ExplicacaoCenario": {
+      "description": "Explicação determinística de UM cenário (IA-7). Todo número citado em `resumo`/`limitacoes` está em\n`numeros` com o valor exato devolvido pela simulação/calibração; o texto nunca altera números.",
+      "properties": {
+        "assinaturaPrograma": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assinaturaprograma"
+        },
+        "cenario": {
+          "title": "Cenario",
+          "type": "string"
+        },
+        "execucaoId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Execucaoid"
+        },
+        "limitacoes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitacoes",
+          "type": "array"
+        },
+        "multiplicadorVendas": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Multiplicadorvendas",
+          "type": "string"
+        },
+        "numeros": {
+          "additionalProperties": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "type": "string"
+          },
+          "title": "Numeros",
+          "type": "object"
+        },
+        "resumo": {
+          "title": "Resumo",
+          "type": "string"
+        },
+        "tipo": {
+          "enum": [
+            "SEM_ORCAMENTO",
+            "DENTRO_DO_ORCAMENTO",
+            "ACIMA_DO_ORCAMENTO",
+            "SUGESTAO_VALIDADA",
+            "SEM_SOLUCAO_VIAVEL",
+            "SUGESTAO_INDISPONIVEL"
+          ],
+          "title": "Tipo",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cenario",
+        "multiplicadorVendas",
+        "tipo",
+        "resumo"
+      ],
+      "title": "ExplicacaoCenario",
+      "type": "object"
+    },
+    "ItemExclusao": {
+      "description": "Vendas fora do cálculo, sempre explícitas (nunca viram zero silenciosamente).",
+      "properties": {
+        "codigo": {
+          "enum": [
+            "FORA_DO_PUBLICO",
+            "SEM_TAXA_CONTRATUAL",
+            "TAXA_CONTRATUAL_AMBIGUA",
+            "CONFLITO_REGRAS"
+          ],
+          "title": "Codigo",
+          "type": "string"
+        },
+        "impedeEncaminhamento": {
+          "default": false,
+          "title": "Impedeencaminhamento",
+          "type": "boolean"
+        },
+        "motivo": {
+          "title": "Motivo",
+          "type": "string"
+        },
+        "quantidade": {
+          "title": "Quantidade",
+          "type": "integer"
+        },
+        "valorVendas": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Soma do valor original dessas vendas.",
+          "title": "Valorvendas"
+        },
+        "vendaIds": {
+          "description": "Até 50 identificadores, para conferência.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Vendaids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "codigo",
+        "motivo",
+        "quantidade"
+      ],
+      "title": "ItemExclusao",
+      "type": "object"
+    },
+    "Pendencia": {
+      "properties": {
+        "campo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Campo"
+        },
+        "codigo": {
+          "$ref": "#/$defs/CodigoPendencia"
+        },
+        "mensagem": {
+          "title": "Mensagem",
+          "type": "string"
+        },
+        "pergunta": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pergunta"
+        }
+      },
+      "required": [
+        "codigo",
+        "mensagem"
+      ],
+      "title": "Pendencia",
+      "type": "object"
+    },
+    "ResultadoCenario": {
+      "properties": {
+        "cenario": {
+          "title": "Cenario",
+          "type": "string"
+        },
+        "custoContratual": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Comissão pelas taxas do BASE_COMMISS sobre as mesmas vendas (referência).",
+          "title": "Custocontratual"
+        },
+        "custoProjetado": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Custo proposto × fator de projeção (dias da campanha ÷ 30).",
+          "title": "Custoprojetado"
+        },
+        "deltaProjetado": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Deltaprojetado"
+        },
+        "diferenca": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Custo proposto − custo contratual.",
+          "title": "Diferenca"
+        },
+        "diferencaPercentual": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Diferencapercentual"
+        },
+        "enquadramento": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnquadramentoCenario"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "fatorProjecao": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fatorprojecao"
+        },
+        "multiplicadorVendas": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Multiplicadorvendas"
+        },
+        "porBloco": {
+          "additionalProperties": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "type": "string"
+          },
+          "description": "Comissão por regra (idLocal). `BASE_CONTRATUAL` agrupa as vendas do público sem regra aplicável.",
+          "title": "Porbloco",
+          "type": "object"
+        },
+        "porMatricula": {
+          "additionalProperties": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "type": "string"
+          },
+          "title": "Pormatricula",
+          "type": "object"
+        },
+        "qtdConflito": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Qtdconflito"
+        },
+        "qtdFallbackContratual": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Qtdfallbackcontratual"
+        },
+        "qtdMudancaFaixa": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Vendas cuja regra (ou fallback) muda em relação ao cenário de 100%.",
+          "title": "Qtdmudancafaixa"
+        },
+        "qtdRegraAplicada": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Qtdregraaplicada"
+        },
+        "qtdVendas": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Qtdvendas"
+        },
+        "totalComissao": {
+          "description": "Custo proposto: comissão da proposta (com fallback contratual).",
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Totalcomissao",
+          "type": "string"
+        },
+        "totalVendas": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Totalvendas",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cenario",
+        "totalVendas",
+        "totalComissao"
+      ],
+      "title": "ResultadoCenario",
+      "type": "object"
+    },
+    "ResumoOrcamento": {
+      "description": "Consolidado do enquadramento nos cenários (mesmos nomes de `ResumoEnquadramentoOrcamentoDTO`).",
+      "properties": {
+        "aptoEncaminhamentoGerente": {
+          "title": "Aptoencaminhamentogerente",
+          "type": "boolean"
+        },
+        "diasInclusivos": {
+          "title": "Diasinclusivos",
+          "type": "integer"
+        },
+        "escopoConsistenteQuatroCenarios": {
+          "title": "Escopoconsistentequatrocenarios",
+          "type": "boolean"
+        },
+        "fatorProjecao": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Fatorprojecao",
+          "type": "string"
+        },
+        "motivoBloqueioEncaminhamento": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Motivobloqueioencaminhamento"
+        },
+        "orcamentoCampanha": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Orcamentocampanha"
+        },
+        "statusCenario100": {
+          "enum": [
+            "ENQUADRADO",
+            "ACIMA_DO_TETO",
+            "NAO_APLICAVEL"
+          ],
+          "title": "Statuscenario100",
+          "type": "string"
+        },
+        "totalVendasEscopoComum": {
+          "title": "Totalvendasescopocomum",
+          "type": "integer"
+        },
+        "valorEncaminhamento": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Custo projetado do cenário de 100%: valor usado por BACK-4 para a aprovação.",
+          "title": "Valorencaminhamento"
+        }
+      },
+      "required": [
+        "diasInclusivos",
+        "fatorProjecao",
+        "totalVendasEscopoComum",
+        "escopoConsistenteQuatroCenarios",
+        "statusCenario100",
+        "aptoEncaminhamentoGerente"
+      ],
+      "title": "ResumoOrcamento",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "assinaturaPrograma": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "sha256 do código executado (TEMPLATE fixo ou código livre aprovado).",
+      "title": "Assinaturaprograma"
+    },
+    "aviso": {
+      "default": "Resultado de simulação. Não substitui a apuração oficial.",
+      "title": "Aviso",
+      "type": "string"
+    },
+    "calibracoes": {
+      "description": "IA-6: uma entrada por cenário.",
+      "items": {
+        "$ref": "#/$defs/Calibracao"
+      },
+      "title": "Calibracoes",
+      "type": "array"
+    },
+    "codigoExecutado": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Codigoexecutado"
+    },
+    "contexto": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ContextoProposta"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Identificadores recebidos, devolvidos (IA-10)."
+    },
+    "exclusoes": {
+      "items": {
+        "$ref": "#/$defs/ItemExclusao"
+      },
+      "title": "Exclusoes",
+      "type": "array"
+    },
+    "explicacoes": {
+      "description": "IA-7: uma explicação por cenário com números, sem LLM.",
+      "items": {
+        "$ref": "#/$defs/ExplicacaoCenario"
+      },
+      "title": "Explicacoes",
+      "type": "array"
+    },
+    "observacoes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Observacoes",
+      "type": "array"
+    },
+    "orcamento": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ResumoOrcamento"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Enquadramento orçamentário consolidado (IA-5). Ausente quando não há números."
+    },
+    "origem": {
+      "enum": [
+        "TEMPLATE",
+        "CODIGO_LIVRE"
+      ],
+      "title": "Origem",
+      "type": "string"
+    },
+    "pendencias": {
+      "items": {
+        "$ref": "#/$defs/Pendencia"
+      },
+      "title": "Pendencias",
+      "type": "array"
+    },
+    "resultados": {
+      "items": {
+        "$ref": "#/$defs/ResultadoCenario"
+      },
+      "title": "Resultados",
+      "type": "array"
+    },
+    "riscos": {
+      "description": "Ressalvas que acompanham os números (ex.: pendências aceitas).",
+      "items": {
+        "type": "string"
+      },
+      "title": "Riscos",
+      "type": "array"
+    },
+    "simulacao": {
+      "const": "SIMULACAO_SANDBOX",
+      "default": "SIMULACAO_SANDBOX",
+      "title": "Simulacao",
+      "type": "string"
+    },
+    "statusSugestoes": {
+      "default": "NAO_SOLICITADA",
+      "description": "FALHA = ao menos um cenário não pôde ser calibrado; nenhuma alternativa foi inventada para ele.",
+      "enum": [
+        "OK",
+        "FALHA",
+        "NAO_SOLICITADA"
+      ],
+      "title": "Statussugestoes",
+      "type": "string"
+    },
+    "trilhaFerramentas": {
+      "items": {
+        "$ref": "#/$defs/EvidenciaTool"
+      },
+      "title": "Trilhaferramentas",
+      "type": "array"
+    },
+    "versaoFontes": {
+      "additionalProperties": true,
+      "description": "Rastreabilidade das fontes usadas: origem dos dados (RECORTE_BACKEND|CONSULTA_AGENTE), competência e quantidade de vendas.",
+      "title": "Versaofontes",
+      "type": "object"
+    }
+  },
+  "required": [
+    "origem"
+  ],
+  "title": "SimularResponse",
+  "type": "object"
+}

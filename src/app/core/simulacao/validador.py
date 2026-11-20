@@ -48,6 +48,52 @@ class ResultadoValidacao:
 
 
 def validar_codigo(codigo: str, max_linhas: int, max_bytes: int) -> ResultadoValidacao:
+    return _validar(codigo, max_linhas, max_bytes, _checar_simular)
+
+
+# --------------------------------------------------------------------- programa aprovado (BACK-9 / IA-10)
+FUNCAO_PROGRAMA = "calcular_comissao"
+
+
+@dataclass
+class ResultadoValidacaoPrograma(ResultadoValidacao):
+    aridade: int = 0  # 1 = calcular_comissao(venda); 2 = calcular_comissao(venda, contexto)
+
+
+def validar_programa(codigo: str, max_linhas: int, max_bytes: int) -> ResultadoValidacaoPrograma:
+    """
+    Mesma análise por lista de permissão, para o programa aprovado no backend: exige
+    `calcular_comissao(venda)` ou `calcular_comissao(venda, contexto)` (nomes livres, sem *args/**kwargs).
+    """
+    r = ResultadoValidacaoPrograma()
+
+    def checar(funcoes: dict[str, ast.FunctionDef], res: ResultadoValidacao) -> None:
+        alvo = funcoes.get(FUNCAO_PROGRAMA)
+        if alvo is None:
+            res.violacoes.append(f"Função `{FUNCAO_PROGRAMA}(venda)` ausente.")
+            return
+        a = alvo.args
+        n = len(a.posonlyargs) + len(a.args)
+        if a.vararg or a.kwarg or a.kwonlyargs or n not in (1, 2):
+            res.violacoes.append(f"A assinatura deve ser `{FUNCAO_PROGRAMA}(venda)` ou "
+                                 f"`{FUNCAO_PROGRAMA}(venda, contexto)`.")
+            return
+        r.aridade = n
+
+    base = _validar(codigo, max_linhas, max_bytes, checar)
+    r.violacoes = base.violacoes
+    return r
+
+
+def _checar_simular(funcoes: dict[str, ast.FunctionDef], r: ResultadoValidacao) -> None:
+    alvo = funcoes.get("simular")
+    if alvo is None:
+        r.violacoes.append("Função `simular(vendas, regras, cenario)` ausente.")
+    elif [a.arg for a in alvo.args.args] != ASSINATURA or alvo.args.vararg or alvo.args.kwarg or alvo.args.kwonlyargs:
+        r.violacoes.append("A assinatura deve ser exatamente `simular(vendas, regras, cenario)`.")
+
+
+def _validar(codigo: str, max_linhas: int, max_bytes: int, checar_assinatura) -> ResultadoValidacao:
     r = ResultadoValidacao()
     if len(codigo.encode("utf-8")) > max_bytes:
         r.violacoes.append(f"Código acima de {max_bytes} bytes.")
@@ -74,11 +120,7 @@ def validar_codigo(codigo: str, max_linhas: int, max_bytes: int) -> ResultadoVal
         else:
             r.violacoes.append(f"Instrução de nível de módulo não permitida (linha {no.lineno}).")
 
-    alvo = funcoes.get("simular")
-    if alvo is None:
-        r.violacoes.append("Função `simular(vendas, regras, cenario)` ausente.")
-    elif [a.arg for a in alvo.args.args] != ASSINATURA or alvo.args.vararg or alvo.args.kwarg or alvo.args.kwonlyargs:
-        r.violacoes.append("A assinatura deve ser exatamente `simular(vendas, regras, cenario)`.")
+    checar_assinatura(funcoes, r)
 
     for no in ast.walk(arvore):
         if isinstance(no, NOS_PROIBIDOS):

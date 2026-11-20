@@ -31,16 +31,29 @@ from app.core.prompts.simulacao_prompt import (
     montar_prompt_codigo,
 )
 from app.core.simulacao import repositorio_codigo
+from app.core.simulacao.calibracao import Avaliacao, Calibrador
+from app.core.simulacao.cenarios import (
+    CENARIOS_PADRAO,
+    CHAVE_CONTRATUAL,
+    Populacao,
+    consolidar,
+    preparar_populacao,
+    riscos,
+)
+from app.core.simulacao.explicacoes import gerar_explicacoes
 from app.core.simulacao.sandbox import ResultadoSandbox, Sandbox
 from app.core.simulacao.templates import TEMPLATE_CODIGO
 from app.providers.base import LLMProvider
 from app.schemas.proposta import (
     BlocoProposta,
+    Calibracao,
     Cenario,
     CodigoPendencia,
     EvidenciaTool,
     GerarProgramaRequest,
     Pendencia,
+    PendenciaAceita,
+    PeriodoCampanha,
     ProgramaArmazenado,
     ProgramaGeradoResponse,
     ResultadoCenario,
@@ -53,16 +66,12 @@ from app.tools.base import ToolRegistry
 logger = logging.getLogger(__name__)
 
 CENT = Decimal("0.01")
-CENARIOS_PADRAO = [
-    Cenario(nome="Vendas 80%", multiplicadorVendas=Decimal("0.8")),
-    Cenario(nome="Vendas 100%", multiplicadorVendas=Decimal("1")),
-    Cenario(nome="Vendas 120%", multiplicadorVendas=Decimal("1.2")),
-]
 _CHAVES = ("cenario", "totalVendas", "totalComissao", "porBloco", "porMatricula")
 
 ESQUEMA_DADOS = {
     "vendas": {"id": "str", "matricula": "str", "codLoja": "int", "codMarca": "int", "codCargo": "int",
-               "valorVenda": "Decimal", "dataVenda": "YYYY-MM-DD", "canal": "str|None"},
+               "descriCargo": "str|None", "valorVenda": "Decimal", "dataVenda": "YYYY-MM-DD", "canal": "str|None",
+               "taxaContratual": "Decimal|None"},
     "regras": {"idLocal": "str", "taxa": "Decimal|None", "bonus": "{percentual, valorFixo}|None",
                "dataInicio": "YYYY-MM-DD|None", "dataFim": "YYYY-MM-DD|None",
                "condicoes": "{canal, codMarca, codCargo, codLoja, matricula, faixaValor{min,max,minInclusivo,maxInclusivo}}"},
@@ -70,11 +79,14 @@ ESQUEMA_DADOS = {
 AMOSTRA_SINTETICA = {
     "vendas": [
         {"id": "s1", "matricula": "SIM-1", "codLoja": 1, "codMarca": 10, "codCargo": 100,
-         "valorVenda": "1000.00", "dataVenda": "2026-01-10", "canal": None},
+         "descriCargo": "VENDEDOR LOJA", "valorVenda": "1000.00", "dataVenda": "2026-01-10", "canal": None,
+         "taxaContratual": "0.025"},
         {"id": "s2", "matricula": "SIM-2", "codLoja": 1, "codMarca": 10, "codCargo": 150,
-         "valorVenda": "2500.50", "dataVenda": "2026-01-11", "canal": "ECOMMERCE"},
+         "descriCargo": "GERENTE DE LOJA", "valorVenda": "2500.50", "dataVenda": "2026-01-11",
+         "canal": "ECOMMERCE", "taxaContratual": "0.01"},
         {"id": "s3", "matricula": "SIM-1", "codLoja": 2, "codMarca": 20, "codCargo": 100,
-         "valorVenda": "99.99", "dataVenda": "2026-01-12", "canal": None},
+         "descriCargo": "VENDEDOR LOJA", "valorVenda": "99.99", "dataVenda": "2026-01-12", "canal": None,
+         "taxaContratual": None},
     ],
 }
 
@@ -83,6 +95,20 @@ AMOSTRA_SINTETICA = {
 class _Falha:
     codigo: CodigoPendencia
     mensagem: str
+
+
+@dataclass
+class _Contexto:
+    """Dados da simulação em curso usados na consolidação dos cenários (IA-5)."""
+
+    competencia: str
+    populacao: Populacao
+    orcamento: Decimal | None
+    periodo: PeriodoCampanha | None
+    pendencias_aceitas: list[PendenciaAceita]
+    simulaveis: list[BlocoProposta]
+    calibrar: bool
+    execucao_id: str | None = None
 
 
 class ServicoSimulacao:
@@ -99,6 +125,7 @@ class ServicoSimulacao:
         self._limites = limites or Limites()
         self._execucoes = 0
         self._trilha: list[EvidenciaTool] = []
+        self._ctx: _Contexto | None = None
 
     # ------------------------------------------------------------------ público
     def buscar_programa(self, assinatura: str) -> ProgramaArmazenado | None:
@@ -162,6 +189,7 @@ class ServicoSimulacao:
     def simular(self, request: SimularRequest) -> SimularResponse:
         self._execucoes = 0
         self._trilha = []
+        self._ctx = None
         observacoes: list[str] = []
 
         simulaveis, pend = self._propostas_simulaveis(request.propostas)
@@ -174,7 +202,21 @@ class ServicoSimulacao:
             return self._resposta_sem_numeros("TEMPLATE", pend + [pendencia(dados.codigo, dados.mensagem)])
         vendas_sb, versao_fontes = dados
 
-        regras_sb = [_regra_para_sandbox(b) for b in simulaveis]
+        populacao = preparar_populacao(vendas_sb, simulaveis, request.taxasContratuais)
+        if not populacao.vendas:
+            return self._resposta_sem_numeros("TEMPLATE", pend + [pendencia(
+                CodigoPendencia.CAMPO_AUSENTE,
+                "Nenhuma venda calculável pertence ao público das regras da proposta.")], versao_fontes=versao_fontes)
+        self._ctx = _Contexto(request.competencia, populacao, request.orcamento, request.periodoCampanha,
+                              list(request.pendenciasAceitas), simulaveis, request.calibrar,
+                              request.contexto.execucaoId)
+        if not populacao.modo_contratual:
+            observacoes.append("Taxas contratuais não informadas: custo contratual e fallback contratual não "
+                               "foram calculados.")
+        vendas_sb = populacao.vendas
+        # Simulação hipotética sobre vendas históricas (igual ao backend): a vigência das regras define a
+        # projeção do custo, não filtra as vendas da competência de referência.
+        regras_sb = [_regra_para_sandbox(b, com_vigencia=False) for b in simulaveis]
 
         if request.codigoAprovado:
             cenarios = list(request.cenarios) or list(CENARIOS_PADRAO)
@@ -249,7 +291,7 @@ class ServicoSimulacao:
                 logger.warning("Extração de cenários falhou: %s", exc)
         if not cenarios:
             cenarios = list(CENARIOS_PADRAO)
-            obs.append("Cenários padrão aplicados: 80%, 100% e 120% das vendas.")
+            obs.append("Cenários padrão aplicados: 80%, 100%, 120% e 150% das vendas.")
         if len(cenarios) > settings.sim_max_cenarios:
             obs.append(f"Limite de {settings.sim_max_cenarios} cenários: os demais foram ignorados.")
             cenarios = cenarios[: settings.sim_max_cenarios]
@@ -257,11 +299,11 @@ class ServicoSimulacao:
 
     def _dados(self, request: SimularRequest) -> tuple[list[dict[str, Any]], dict[str, Any]] | _Falha:
         if request.vendas is not None:
-            return self._dados_do_recorte(request.vendas, request.competencia)
+            return self._dados_do_recorte(request.vendas, request.competencia, request.versoesFontes)
         return self._dados_via_consulta(request)
 
     def _dados_do_recorte(
-        self, vendas: list[VendaRecorte], competencia: str
+        self, vendas: list[VendaRecorte], competencia: str, versoes: dict[str, Any] | None = None
     ) -> tuple[list[dict[str, Any]], dict[str, Any]] | _Falha:
         """
         Recorte enviado pelo backend (BACK-10): fonte ÚNICA de dados — não há busca à base por fora,
@@ -274,7 +316,11 @@ class ServicoSimulacao:
         if not vendas:
             return _Falha(CodigoPendencia.CAMPO_AUSENTE, "O recorte de vendas enviado pelo backend está vazio.")
         vendas_sb = [_venda_recorte_para_sandbox(v) for v in vendas]
-        return vendas_sb, {"origemDados": "RECORTE_BACKEND", "competencia": competencia, "qtdVendas": len(vendas_sb)}
+        fontes: dict[str, Any] = {"origemDados": "RECORTE_BACKEND", "competencia": competencia,
+                                  "qtdVendas": len(vendas_sb)}
+        if versoes:
+            fontes["recorte"] = _versoes_recorte(versoes)
+        return vendas_sb, fontes
 
     def _dados_via_consulta(self, request: SimularRequest) -> tuple[list[dict[str, Any]], dict[str, Any]] | _Falha:
         tool = self._tools.obter("obter_dados_simulacao")
@@ -308,14 +354,17 @@ class ServicoSimulacao:
                                               versao_fontes=versao_fontes)
         obs.append("Simulação por modelo padrão de cálculo (taxa, faixas e bônus por venda).")
         primeiro = res.resultados[0]
+        if primeiro.get("vendasFallbackContratual"):
+            obs.append(f"{primeiro['vendasFallbackContratual']} venda(s) do público sem regra aplicável na faixa "
+                       "usaram a taxa contratual.")
         if primeiro.get("vendasSemRegra"):
-            obs.append(f"{primeiro['vendasSemRegra']} venda(s) não casaram com nenhuma proposta e ficaram fora do cálculo.")
+            obs.append(f"{primeiro['vendasSemRegra']} venda(s) sem regra aplicável nem taxa contratual ficaram "
+                       "fora do cálculo.")
         if primeiro.get("vendasEmConflito"):
             obs.append(f"{primeiro['vendasEmConflito']} venda(s) com propostas empatadas em especificidade "
                        "não foram calculadas (conflito).")
-        return SimularResponse(origem="TEMPLATE", resultados=resultados, observacoes=obs, pendencias=pend,
-                               assinaturaPrograma=_assinatura(TEMPLATE_CODIGO), versaoFontes=versao_fontes,
-                               trilhaFerramentas=self._trilha)
+        return self._resposta_com_numeros("TEMPLATE", resultados, res.resultados, cenarios, obs, pend,
+                                          versao_fontes, None)
 
     def _caminho_livre(self, calculo, simulaveis, regras_sb, vendas_sb, cen_sb, cenarios, obs, pend, versao_fontes) -> SimularResponse:
         gerado, falha = self._gerar_e_sondar(calculo, simulaveis, regras_sb, cenarios)
@@ -372,9 +421,8 @@ class ServicoSimulacao:
                                           "de referência; o resultado foi descartado.")],
                         codigo, premissas, versao_fontes=versao_fontes)
         obs.append("Resultado de código gerado pela IA; revise o código e as premissas antes de usar.")
-        return SimularResponse(origem="CODIGO_LIVRE", resultados=resultados, observacoes=obs + premissas,
-                               codigoExecutado=codigo, assinaturaPrograma=_assinatura(codigo),
-                               versaoFontes=versao_fontes, pendencias=pend, trilhaFerramentas=self._trilha)
+        return self._resposta_com_numeros("CODIGO_LIVRE", resultados, res.resultados, cenarios, obs + premissas,
+                                          pend, versao_fontes, codigo)
 
     # --------------------------------------------------------------- código livre
     def _gerar_e_sondar(
@@ -428,6 +476,61 @@ class ServicoSimulacao:
         ))
         return res
 
+    def _resposta_com_numeros(self, origem, resultados, brutos, cenarios, obs, pend, versao_fontes,
+                              codigo: str | None) -> SimularResponse:
+        """IA-5: custo contratual, projeção e enquadramento; reconciliação falha = nenhum número exibido."""
+        assinatura = _assinatura(codigo if codigo is not None else TEMPLATE_CODIGO)
+        ctx = self._ctx
+        if ctx is None:  # não ocorre em simular(); mantém o contrato anterior por segurança
+            return SimularResponse(origem=origem, resultados=resultados, observacoes=obs, pendencias=pend,
+                                   codigoExecutado=codigo, assinaturaPrograma=assinatura,
+                                   versaoFontes=versao_fontes, trilhaFerramentas=self._trilha)
+        c = consolidar(resultados, brutos, cenarios, ctx.populacao, ctx.orcamento, ctx.periodo, ctx.competencia)
+        if c.erro:
+            return self._resposta_sem_numeros(
+                origem, pend + [pendencia(CodigoPendencia.SIMULACAO_NAO_VALIDADA, f"Resultado inválido: {c.erro}")],
+                codigo, versao_fontes=versao_fontes)
+        calibracoes, status_sugestoes = self._calibrar(ctx, c.resultados, cenarios, codigo, assinatura, pend)
+        lista_riscos = riscos(ctx.pendencias_aceitas)
+        explicacoes = gerar_explicacoes(c.resultados, calibracoes, c.resumo, c.exclusoes, lista_riscos, assinatura,
+                                        ctx.execucao_id)
+        return SimularResponse(origem=origem, resultados=c.resultados, observacoes=obs, pendencias=pend,
+                               codigoExecutado=codigo, assinaturaPrograma=assinatura, versaoFontes=versao_fontes,
+                               orcamento=c.resumo, exclusoes=c.exclusoes, riscos=lista_riscos,
+                               calibracoes=calibracoes, statusSugestoes=status_sugestoes, explicacoes=explicacoes,
+                               trilhaFerramentas=self._trilha)
+
+    def _calibrar(self, ctx: _Contexto, resultados: list[ResultadoCenario], cenarios: list[Cenario],
+                  codigo: str | None, assinatura: str, pend: list[Pendencia]) -> tuple[list[Calibracao], str]:
+        """IA-6: uma alternativa por cenário, sempre reexecutando o MESMO programa da simulação."""
+        if not ctx.calibrar:
+            return [], "NAO_SOLICITADA"
+        if ctx.orcamento is None:
+            pend.append(pendencia(CodigoPendencia.CAMPO_AUSENTE,
+                                  "A calibração exige o orçamento da campanha; nenhuma sugestão foi gerada.",
+                                  "orcamento"))
+            return [], "FALHA"
+        codigo_exec = codigo if codigo is not None else TEMPLATE_CODIGO
+
+        def avaliar(blocos: list[BlocoProposta], cen: Cenario) -> Avaliacao:
+            regras = [_regra_para_sandbox(b, com_vigencia=False) for b in blocos]
+            cen_sb = [{"nome": cen.nome, "multiplicadorVendas": str(cen.multiplicadorVendas)}]
+            res = self._executar(codigo_exec, "CALIBRACAO", ctx.populacao.vendas, regras, cen_sb)
+            if not res.ok:
+                return Avaliacao(None, f"{res.erro}: {res.detalhe}")
+            validos, falha = _validar_resultados(res.resultados, [cen], blocos)
+            if falha:
+                return Avaliacao(None, falha.mensagem)
+            cons = consolidar(validos, res.resultados, [cen], ctx.populacao, ctx.orcamento, ctx.periodo,
+                              ctx.competencia)
+            return Avaliacao(None, cons.erro) if cons.erro else Avaliacao(cons.resultados[0])
+
+        calibrador = Calibrador(avaliar, settings.calib_max_tentativas, settings.calib_max_segundos)
+        assert ctx.orcamento is not None
+        calibracoes = [calibrador.calibrar(ctx.simulaveis, r, cen, ctx.orcamento, assinatura)
+                       for r, cen in zip(resultados, cenarios)]
+        return calibracoes, ("FALHA" if any(c.status == "FALHA" for c in calibracoes) else "OK")
+
     def _resposta_sem_numeros(self, origem: str, pend: list[Pendencia], codigo: str | None = None,
                               premissas: list[str] | None = None,
                               versao_fontes: dict[str, Any] | None = None) -> SimularResponse:
@@ -437,6 +540,17 @@ class ServicoSimulacao:
 
 
 # --------------------------------------------------------------------- helpers
+def _versoes_recorte(versoes: dict[str, Any]) -> dict[str, Any]:
+    """IA-10: hashes do BACK-10 e versão da campanha, para ligar o resultado aos dados exatos usados."""
+    saida: dict[str, Any] = {k: v for k, v in sorted(versoes.items()) if k.startswith("hash") and v is not None}
+    campanha = versoes.get("campanha")
+    if isinstance(campanha, dict):
+        for k in ("campanhaId", "versaoId", "versaoNumero", "hashArtefatosCodigo"):
+            if campanha.get(k) is not None:
+                saida[f"campanha.{k}"] = campanha[k]
+    return saida
+
+
 def _assinatura(codigo: str) -> str:
     return hashlib.sha256(codigo.encode()).hexdigest()
 
@@ -455,9 +569,11 @@ def _venda_para_sandbox(v: dict[str, Any]) -> dict[str, Any]:
         "codLoja": v.get("codLoja"),
         "codMarca": v.get("codMarca"),
         "codCargo": v.get("codCargo"),
+        "descriCargo": v.get("descriCargo"),
         "valorVenda": str(v.get("valorVenda", "0")),
         "dataVenda": str(v.get("dataVenda")) if v.get("dataVenda") else None,
         "canal": v.get("canal"),
+        "taxaContratual": str(v["taxaContratual"]) if v.get("taxaContratual") is not None else None,
     }
 
 
@@ -468,13 +584,15 @@ def _venda_recorte_para_sandbox(v: VendaRecorte) -> dict[str, Any]:
         "codLoja": v.codLoja,
         "codMarca": v.codMarca,
         "codCargo": v.codCargo,
+        "descriCargo": v.descriCargo,
         "valorVenda": str(v.valorVenda),
         "dataVenda": v.dataVenda.isoformat(),
         "canal": v.canal,
+        "taxaContratual": str(v.taxaContratual) if v.taxaContratual is not None else None,
     }
 
 
-def _regra_para_sandbox(b: BlocoProposta) -> dict[str, Any]:
+def _regra_para_sandbox(b: BlocoProposta, com_vigencia: bool = True) -> dict[str, Any]:
     c = b.condicoes
     faixa = None
     if c.faixaValor:
@@ -490,8 +608,8 @@ def _regra_para_sandbox(b: BlocoProposta) -> dict[str, Any]:
         "idLocal": b.idLocal,
         "taxa": str(b.taxa) if b.taxa is not None else None,
         "bonus": bonus,
-        "dataInicio": b.dataInicio.isoformat() if b.dataInicio else None,
-        "dataFim": b.dataFim.isoformat() if b.dataFim else None,
+        "dataInicio": b.dataInicio.isoformat() if com_vigencia and b.dataInicio else None,
+        "dataFim": b.dataFim.isoformat() if com_vigencia and b.dataFim else None,
         "condicoes": {"canal": c.canal, "codMarca": c.codMarca, "codCargo": c.codCargo, "codLoja": c.codLoja,
                       "matricula": c.matricula, "faixaValor": faixa},
     }
@@ -531,7 +649,7 @@ def _validar_resultados(
                 return falha("valor monetário fora da escala de 2 casas decimais.")
             if v < 0:
                 return falha("valor monetário negativo.")
-        if not set(por_bloco) <= ids:
+        if not set(por_bloco) <= ids | {CHAVE_CONTRATUAL}:
             return falha("o resultado cita propostas inexistentes.")
         if sum(por_bloco.values(), Decimal("0")) != tc:
             return falha("a soma por proposta não confere com o total de comissão.")

@@ -1,0 +1,185 @@
+{
+  "$defs": {
+    "ContextoExecucao": {
+      "additionalProperties": true,
+      "description": "Identificadores do backend; a IA só registra e devolve (não autentica usuários).",
+      "properties": {
+        "campanhaId": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Campanhaid"
+        },
+        "competencia": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Competencia"
+        },
+        "dataFim": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Datafim"
+        },
+        "dataInicio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Datainicio"
+        },
+        "execucaoId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Execucaoid"
+        },
+        "modo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "SIMULACAO ou APURACAO.",
+          "title": "Modo"
+        },
+        "usuarioSolicitanteId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usuariosolicitanteid"
+        },
+        "versaoCampanha": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Versaocampanha"
+        },
+        "versaoProgramaPython": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Versaoprogramapython"
+        }
+      },
+      "title": "ContextoExecucao",
+      "type": "object"
+    },
+    "ItemExecucao": {
+      "properties": {
+        "contexto": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Ex.: cenário e fator; 2º argumento opcional.",
+          "title": "Contexto"
+        },
+        "id": {
+          "description": "Id opaco do item (ex.: `<idVenda>#100`); volta em `resultados`.",
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "venda": {
+          "additionalProperties": true,
+          "description": "Venda como `CampanhaProgramaPythonService.montarVendaParaPython`.",
+          "title": "Venda",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "venda"
+      ],
+      "title": "ItemExecucao",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "codigoFonte": {
+      "minLength": 1,
+      "title": "Codigofonte",
+      "type": "string"
+    },
+    "contexto": {
+      "$ref": "#/$defs/ContextoExecucao"
+    },
+    "itens": {
+      "items": {
+        "$ref": "#/$defs/ItemExecucao"
+      },
+      "title": "Itens",
+      "type": "array"
+    }
+  },
+  "required": [
+    "codigoFonte"
+  ],
+  "title": "ExecutarProgramaRequest",
+  "type": "object"
+}
