@@ -13,18 +13,25 @@ import math
 
 import uvicorn
 from fastapi import FastAPI
-
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from app.api.middleware import FiltroCorrelacao, avisar_configuracao, rastrear_e_autenticar
 from app.api.routes.health import router as health_router
 from app.api.routes.interpretador import router as interpretador_router
 from app.api.routes.v2 import router as v2_router
 from app.core.config import settings
+from app.core.erros import codigo_por_status, corpo_erro
 from app.core.exceptions import LLMBaseException, LLMRateLimitError
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+    format="%(asctime)s %(levelname)s %(name)s [%(correlation_id)s] - %(message)s",
 )
+for _handler in logging.getLogger().handlers:
+    _handler.addFilter(FiltroCorrelacao())
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +43,22 @@ app = FastAPI(
     ),
     version="0.1.0",
 )
+
+# IA-10: X-Correlation-Id em toda resposta/log e chave interna do backend nas rotas (exceto /health e docs).
+app.middleware("http")(rastrear_e_autenticar)
+avisar_configuracao()
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc: RequestValidationError):
+    erros = [{"loc": list(e.get("loc", ())), "msg": e.get("msg"), "type": e.get("type")} for e in exc.errors()]
+    return JSONResponse(status_code=422, content=jsonable_encoder(corpo_erro("VALIDACAO_ENTRADA", erros=erros)))
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request, exc: StarletteHTTPException):
+    return JSONResponse(status_code=exc.status_code, headers=getattr(exc, "headers", None),
+                        content=corpo_erro(codigo_por_status(exc.status_code), str(exc.detail)))
 
 
 @app.exception_handler(LLMBaseException)

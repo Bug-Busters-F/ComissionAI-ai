@@ -1,7 +1,7 @@
 """
 Normalizador determinístico de valores monetários e faixas de valor de venda (IA-2).
 
-Entende: "R$ 1.500,00", "10 mil", "10k", "1,5 milhão", "10000".
+Entende: "R$ 1.500,00", "10 mil", "10k", "1,5 milhão", "10000", "cinco mil reais", "mil e quinhentos".
 Nunca estima: texto que não vira número gera pendência.
 """
 
@@ -9,6 +9,7 @@ import re
 import unicodedata
 from decimal import Decimal, InvalidOperation
 
+from app.core.normalizers.extenso import numero_por_extenso
 from app.schemas.proposta import FaixaValor
 
 _MULTIPLICADORES = {
@@ -33,7 +34,12 @@ def normalizar_valor_monetario(raw: str | None) -> tuple[Decimal | None, list[st
     texto = _sem_acento(raw).upper().replace("R$", " ").strip()
     m = re.search(r"(\d[\d.,]*)\s*(MILHOES|MILHAO|MIL|MI|K|M)?\b", texto)
     if not m:
-        return None, [f"Não foi possível interpretar o valor '{raw}'."]
+        extenso = numero_por_extenso(raw.replace("R$", " "))
+        if extenso is None:
+            return None, [f"Não foi possível interpretar o valor '{raw}'."]
+        if extenso < 0:
+            return None, [f"O valor '{raw}' não pode ser negativo."]
+        return extenso.quantize(Decimal("0.01")), []
     numero, sufixo = m.group(1), m.group(2)
     # Formato brasileiro: ponto = milhar, vírgula = decimal. Sem vírgula e com ponto
     # seguido de 3 dígitos, o ponto também é milhar.

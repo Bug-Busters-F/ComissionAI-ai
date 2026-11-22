@@ -1,0 +1,619 @@
+{
+  "$defs": {
+    "AlertaAnomalia": {
+      "properties": {
+        "data": {
+          "format": "date",
+          "title": "Data",
+          "type": "string"
+        },
+        "distanciaFaixa": {
+          "description": "Quanto o valor passa do limite da faixa (sempre positivo).",
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Distanciafaixa",
+          "type": "string"
+        },
+        "evidencia": {
+          "$ref": "#/$defs/EvidenciaIqr"
+        },
+        "explicacao": {
+          "title": "Explicacao",
+          "type": "string"
+        },
+        "faixaEsperada": {
+          "$ref": "#/$defs/FaixaEsperada"
+        },
+        "grupo": {
+          "$ref": "#/$defs/GrupoComparavel"
+        },
+        "id": {
+          "description": "Identificador de negócio estável (competência + grupo + matrícula + dia): não muda quando outras vendas da base mudam; a versão dos dados está em `versaoDados`.",
+          "title": "Id",
+          "type": "string"
+        },
+        "matricula": {
+          "title": "Matricula",
+          "type": "string"
+        },
+        "qtdVendas": {
+          "title": "Qtdvendas",
+          "type": "integer"
+        },
+        "tamanhoAmostra": {
+          "title": "Tamanhoamostra",
+          "type": "integer"
+        },
+        "tipo": {
+          "enum": [
+            "ACIMA_DA_FAIXA",
+            "ABAIXO_DA_FAIXA"
+          ],
+          "title": "Tipo",
+          "type": "string"
+        },
+        "valorObservado": {
+          "description": "Total vendido pelo colaborador no dia.",
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Valorobservado",
+          "type": "string"
+        },
+        "vendaIds": {
+          "description": "Até 50 vendas do dia, para conferência.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Vendaids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "tipo",
+        "matricula",
+        "data",
+        "valorObservado",
+        "qtdVendas",
+        "faixaEsperada",
+        "distanciaFaixa",
+        "grupo",
+        "tamanhoAmostra",
+        "evidencia",
+        "explicacao"
+      ],
+      "title": "AlertaAnomalia",
+      "type": "object"
+    },
+    "CoberturaDias": {
+      "properties": {
+        "diasComVenda": {
+          "items": {
+            "format": "date",
+            "type": "string"
+          },
+          "title": "Diascomvenda",
+          "type": "array"
+        },
+        "diasNaCompetencia": {
+          "title": "Diasnacompetencia",
+          "type": "integer"
+        },
+        "diasSemCobertura": {
+          "description": "Dias da competência sem nenhuma venda no recorte (não viram zero).",
+          "title": "Diassemcobertura",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "diasNaCompetencia",
+        "diasComVenda",
+        "diasSemCobertura"
+      ],
+      "title": "CoberturaDias",
+      "type": "object"
+    },
+    "ContextoProposta": {
+      "description": "Identifica de onde vem o pedido. Todos os ids são opacos para a IA.",
+      "properties": {
+        "campanhaId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Campanhaid"
+        },
+        "execucaoId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Id da execução no backend; devolvido em cada explicação (IA-7).",
+          "title": "Execucaoid"
+        },
+        "origem": {
+          "default": "NOVA",
+          "enum": [
+            "NOVA",
+            "VERSAO_EXISTENTE"
+          ],
+          "title": "Origem",
+          "type": "string"
+        },
+        "revisao": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revisao"
+        },
+        "substituiVersao": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Substituiversao"
+        },
+        "usuarioSolicitanteId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usuariosolicitanteid"
+        },
+        "versaoPrograma": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Versão do programa aprovada no backend (BACK-9); a IA devolve também a assinatura.",
+          "title": "Versaoprograma"
+        }
+      },
+      "title": "ContextoProposta",
+      "type": "object"
+    },
+    "ErroCarga": {
+      "description": "Vendas fora da análise, sempre explícitas (nunca entram como zero nem geram alerta).",
+      "properties": {
+        "codigo": {
+          "enum": [
+            "VENDA_SEM_RH",
+            "VENDA_SEM_MARCA",
+            "FORA_DA_COMPETENCIA"
+          ],
+          "title": "Codigo",
+          "type": "string"
+        },
+        "matriculas": {
+          "description": "Até 50.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Matriculas",
+          "type": "array"
+        },
+        "motivo": {
+          "title": "Motivo",
+          "type": "string"
+        },
+        "quantidade": {
+          "title": "Quantidade",
+          "type": "integer"
+        },
+        "valorVendas": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Valorvendas",
+          "type": "string"
+        },
+        "vendaIds": {
+          "description": "Até 50.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Vendaids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "codigo",
+        "motivo",
+        "quantidade",
+        "valorVendas"
+      ],
+      "title": "ErroCarga",
+      "type": "object"
+    },
+    "EvidenciaIqr": {
+      "properties": {
+        "iqr": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Iqr",
+          "type": "string"
+        },
+        "mediana": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Mediana",
+          "type": "string"
+        },
+        "q1": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Q1",
+          "type": "string"
+        },
+        "q3": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Q3",
+          "type": "string"
+        }
+      },
+      "required": [
+        "q1",
+        "mediana",
+        "q3",
+        "iqr"
+      ],
+      "title": "EvidenciaIqr",
+      "type": "object"
+    },
+    "FaixaEsperada": {
+      "properties": {
+        "max": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Max",
+          "type": "string"
+        },
+        "min": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "Min",
+          "type": "string"
+        }
+      },
+      "required": [
+        "min",
+        "max"
+      ],
+      "title": "FaixaEsperada",
+      "type": "object"
+    },
+    "GrupoComparavel": {
+      "description": "Marca + código do cargo + descrição do cargo (150 = GERENTE DE LOJA ou GERENTE QUIOSQUE) + competência.",
+      "properties": {
+        "codCargo": {
+          "title": "Codcargo",
+          "type": "integer"
+        },
+        "codMarca": {
+          "title": "Codmarca",
+          "type": "integer"
+        },
+        "competencia": {
+          "title": "Competencia",
+          "type": "string"
+        },
+        "descriCargo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Descricargo"
+        }
+      },
+      "required": [
+        "codMarca",
+        "codCargo",
+        "competencia"
+      ],
+      "title": "GrupoComparavel",
+      "type": "object"
+    },
+    "MetodoAnomalia": {
+      "properties": {
+        "amostraMinima": {
+          "title": "Amostraminima",
+          "type": "integer"
+        },
+        "arredondamento": {
+          "default": "Quartis e limites em centavos (HALF_UP); faixa = [Q1 − k·IQR, Q3 + k·IQR], com mínimo 0 quando o grupo não tem valores negativos.",
+          "title": "Arredondamento",
+          "type": "string"
+        },
+        "k": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "title": "K",
+          "type": "string"
+        },
+        "nome": {
+          "const": "IQR_TUKEY",
+          "default": "IQR_TUKEY",
+          "title": "Nome",
+          "type": "string"
+        },
+        "quartis": {
+          "const": "INTERPOLACAO_LINEAR_INCLUSIVA",
+          "default": "INTERPOLACAO_LINEAR_INCLUSIVA",
+          "title": "Quartis",
+          "type": "string"
+        },
+        "unidade": {
+          "const": "TOTAL_COLABORADOR_DIA",
+          "default": "TOTAL_COLABORADOR_DIA",
+          "title": "Unidade",
+          "type": "string"
+        }
+      },
+      "required": [
+        "k",
+        "amostraMinima"
+      ],
+      "title": "MetodoAnomalia",
+      "type": "object"
+    },
+    "ResultadoGrupo": {
+      "properties": {
+        "colaboradores": {
+          "title": "Colaboradores",
+          "type": "integer"
+        },
+        "evidencia": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EvidenciaIqr"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "faixaEsperada": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FaixaEsperada"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "grupo": {
+          "$ref": "#/$defs/GrupoComparavel"
+        },
+        "motivo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Motivo"
+        },
+        "qtdAlertas": {
+          "default": 0,
+          "title": "Qtdalertas",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "ANALISADO",
+            "AMOSTRA_INSUFICIENTE",
+            "SEM_VARIACAO"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tamanhoAmostra": {
+          "description": "Observações colaborador/dia do grupo.",
+          "title": "Tamanhoamostra",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "grupo",
+        "status",
+        "tamanhoAmostra",
+        "colaboradores"
+      ],
+      "title": "ResultadoGrupo",
+      "type": "object"
+    },
+    "ResumoAnomalias": {
+      "properties": {
+        "alertas": {
+          "title": "Alertas",
+          "type": "integer"
+        },
+        "grupos": {
+          "title": "Grupos",
+          "type": "integer"
+        },
+        "gruposAmostraInsuficiente": {
+          "title": "Gruposamostrainsuficiente",
+          "type": "integer"
+        },
+        "gruposAnalisados": {
+          "title": "Gruposanalisados",
+          "type": "integer"
+        },
+        "gruposSemVariacao": {
+          "title": "Grupossemvariacao",
+          "type": "integer"
+        },
+        "observacoes": {
+          "title": "Observacoes",
+          "type": "integer"
+        },
+        "totalVendas": {
+          "title": "Totalvendas",
+          "type": "integer"
+        },
+        "vendasAnalisadas": {
+          "title": "Vendasanalisadas",
+          "type": "integer"
+        },
+        "vendasComErroCarga": {
+          "title": "Vendascomerrocarga",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "totalVendas",
+        "vendasAnalisadas",
+        "observacoes",
+        "grupos",
+        "gruposAnalisados",
+        "gruposAmostraInsuficiente",
+        "gruposSemVariacao",
+        "alertas",
+        "vendasComErroCarga"
+      ],
+      "title": "ResumoAnomalias",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "alertas": {
+      "items": {
+        "$ref": "#/$defs/AlertaAnomalia"
+      },
+      "title": "Alertas",
+      "type": "array"
+    },
+    "aviso": {
+      "default": "Anomalia é indício para conferência, não correção automática da venda.",
+      "title": "Aviso",
+      "type": "string"
+    },
+    "cobertura": {
+      "$ref": "#/$defs/CoberturaDias"
+    },
+    "competencia": {
+      "title": "Competencia",
+      "type": "string"
+    },
+    "contexto": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ContextoProposta"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Identificadores recebidos, devolvidos (IA-10)."
+    },
+    "errosCarga": {
+      "items": {
+        "$ref": "#/$defs/ErroCarga"
+      },
+      "title": "Erroscarga",
+      "type": "array"
+    },
+    "execucaoId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Execucaoid"
+    },
+    "explicacao": {
+      "title": "Explicacao",
+      "type": "string"
+    },
+    "granularidade": {
+      "const": "DIARIA",
+      "default": "DIARIA",
+      "title": "Granularidade",
+      "type": "string"
+    },
+    "grupos": {
+      "items": {
+        "$ref": "#/$defs/ResultadoGrupo"
+      },
+      "title": "Grupos",
+      "type": "array"
+    },
+    "metodo": {
+      "$ref": "#/$defs/MetodoAnomalia"
+    },
+    "observacoes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Observacoes",
+      "type": "array"
+    },
+    "resumo": {
+      "$ref": "#/$defs/ResumoAnomalias"
+    },
+    "tipo": {
+      "const": "INDICIO_PARA_CONFERENCIA",
+      "default": "INDICIO_PARA_CONFERENCIA",
+      "title": "Tipo",
+      "type": "string"
+    },
+    "versaoDados": {
+      "description": "sha256 do recorte analisado + parâmetros (independe da ordem).",
+      "title": "Versaodados",
+      "type": "string"
+    },
+    "versaoFontes": {
+      "additionalProperties": true,
+      "title": "Versaofontes",
+      "type": "object"
+    }
+  },
+  "required": [
+    "competencia",
+    "metodo",
+    "versaoDados",
+    "resumo",
+    "cobertura",
+    "explicacao"
+  ],
+  "title": "AnalisarAnomaliasResponse",
+  "type": "object"
+}

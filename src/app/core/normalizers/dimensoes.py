@@ -26,6 +26,9 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 
+_PREPOSICOES = {"DE", "DO", "DA", "DOS", "DAS"}
+
+
 def _normalizar_texto(texto: str) -> str:
     """Remove acentos, converte para maiúsculo e colapsa espaços extras."""
     nfkd = unicodedata.normalize("NFKD", texto)
@@ -213,13 +216,20 @@ def normalizar_cargo(
     else:
         # 2. Match flexível (singular/plural e termos contidos)
         cargo_stem = re.sub(r"(ES|S)\b", "", cargo_limpo)
+        # "vendedores de balcão" deve casar com "VENDEDOR BALCAO": ignora preposições e plural.
+        palavras_cargo = [re.sub(r"(ES|S)$", "", w) for w in cargo_limpo.split() if w not in _PREPOSICOES]
         candidatos = []
         for cod, nome in itens_cargos:
             nome_stem = re.sub(r"(ES|S)\b", "", nome)
+            palavras_nome = nome.split()
             if (
                 cargo_limpo in nome
                 or (len(cargo_stem) >= 4 and cargo_stem in nome_stem)
                 or all(w in nome.split() for w in cargo_limpo.split())
+                or (palavras_cargo and all(
+                    any(w == pn or (len(w) >= 4 and w in pn) for pn in palavras_nome)
+                    for w in palavras_cargo
+                ))
             ):
                 candidatos.append((cod, nome))
 

@@ -25,6 +25,9 @@ O QUE É UMA REGRA:
 - "3% para vendedores e 2% para gerentes" são DUAS regras.
 - Faixas de valor ("2% até R$ 10 mil e 3% acima") são regras separadas, uma por faixa.
 - Comissão individual: preencha `matricula_raw`.
+- CARGO: copie em `cargo_raw` a expressão inteira do cargo, com qualificadores ("vendedores de balcão",
+  "gerentes de quiosque", "vendedor loja"). Se a expressão corresponde a um cargo do catálogo, ela é cargo:
+  não separe "balcão", "loja" ou "quiosque" como canal nem como critério não suportado.
 - Bônus adicional sobre a venda: `bonus_percentual_raw` (ex.: "+1%") ou `bonus_valor_raw` (ex.: "R$ 50 por venda").
 
 TAXA ABSOLUTA x AJUSTE:
@@ -57,6 +60,18 @@ FEW_SHOT_CAMPANHA: list[dict[str, Any]] = [
             ],
             "vigencia_inicio_raw": "dezembro",
             "vigencia_fim_raw": "dezembro",
+            "trechos_nao_mapeados": [],
+        },
+    },
+    {
+        "input": "Na marca Azul, 2% para vendedores de balcão",
+        "output": {
+            "regras": [
+                {"trecho_origem": "Na marca Azul, 2% para vendedores de balcão", "taxa_raw": "2%",
+                 "cargo_raw": "vendedores de balcão", "marca_raw": "Azul"},
+            ],
+            "vigencia_inicio_raw": None,
+            "vigencia_fim_raw": None,
             "trechos_nao_mapeados": [],
         },
     },

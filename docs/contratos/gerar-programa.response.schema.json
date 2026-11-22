@@ -1,0 +1,217 @@
+{
+  "$defs": {
+    "CodigoPendencia": {
+      "description": "Catálogo fechado de pendências.",
+      "enum": [
+        "CAMPO_AUSENTE",
+        "AMBIGUIDADE_CARGO",
+        "AMBIGUIDADE_PUBLICO",
+        "CADASTRO_INEXISTENTE",
+        "MATRICULA_INVALIDA",
+        "CRITERIO_NAO_SUPORTADO",
+        "TRECHO_INCOMPLETO",
+        "VIGENCIA_INCOMPATIVEL",
+        "BASE_AUSENTE",
+        "CONFLITO_REGRA",
+        "TOOL_FALHA",
+        "LIMITE_AGENTE_ATINGIDO",
+        "TAXA_INVALIDA",
+        "SIMULACAO_NAO_VALIDADA",
+        "NAO_SUPORTADO_NA_APURACAO"
+      ],
+      "title": "CodigoPendencia",
+      "type": "string"
+    },
+    "ContextoProposta": {
+      "description": "Identifica de onde vem o pedido. Todos os ids são opacos para a IA.",
+      "properties": {
+        "campanhaId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Campanhaid"
+        },
+        "execucaoId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Id da execução no backend; devolvido em cada explicação (IA-7).",
+          "title": "Execucaoid"
+        },
+        "origem": {
+          "default": "NOVA",
+          "enum": [
+            "NOVA",
+            "VERSAO_EXISTENTE"
+          ],
+          "title": "Origem",
+          "type": "string"
+        },
+        "revisao": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revisao"
+        },
+        "substituiVersao": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Substituiversao"
+        },
+        "usuarioSolicitanteId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usuariosolicitanteid"
+        },
+        "versaoPrograma": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Versão do programa aprovada no backend (BACK-9); a IA devolve também a assinatura.",
+          "title": "Versaoprograma"
+        }
+      },
+      "title": "ContextoProposta",
+      "type": "object"
+    },
+    "Pendencia": {
+      "properties": {
+        "campo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Campo"
+        },
+        "codigo": {
+          "$ref": "#/$defs/CodigoPendencia"
+        },
+        "mensagem": {
+          "title": "Mensagem",
+          "type": "string"
+        },
+        "pergunta": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pergunta"
+        }
+      },
+      "required": [
+        "codigo",
+        "mensagem"
+      ],
+      "title": "Pendencia",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "assinatura": {
+      "description": "sha256 do código (fixo ou gerado); identifica a versão aprovada.",
+      "title": "Assinatura",
+      "type": "string"
+    },
+    "codigo": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "None quando origem=TEMPLATE (código fixo, não versionado por chamada).",
+      "title": "Codigo"
+    },
+    "contexto": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ContextoProposta"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Identificadores recebidos, devolvidos (IA-10)."
+    },
+    "origem": {
+      "enum": [
+        "TEMPLATE",
+        "CODIGO_LIVRE"
+      ],
+      "title": "Origem",
+      "type": "string"
+    },
+    "pendencias": {
+      "items": {
+        "$ref": "#/$defs/Pendencia"
+      },
+      "title": "Pendencias",
+      "type": "array"
+    },
+    "premissas": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Premissas",
+      "type": "array"
+    }
+  },
+  "required": [
+    "origem",
+    "assinatura"
+  ],
+  "title": "ProgramaGeradoResponse",
+  "type": "object"
+}

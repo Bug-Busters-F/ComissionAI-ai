@@ -1,0 +1,208 @@
+{
+  "info": {
+    "name": "ComissionAI-ai — IA-1/IA-2/IA-3 (Sprint 3)",
+    "description": "Coleção pra validar manualmente as rotas alteradas por BUG-114 (IA-1), BUG-115 (IA-2) e BUG-116 (IA-3). Suba o serviço antes: `uvicorn app.main:app --port {{port}}` (ou `python -m app.main`) a partir de `src/`, com `.env` configurado (LLM_SDK/LLM_API_KEY).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8000" },
+    { "key": "competencia", "value": "2026-12" },
+    { "key": "assinaturaPrograma", "value": "" },
+    { "key": "codigoAprovado", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "IA-1 — BUG-114: interpretação e extração do orçamento",
+      "description": "Melhorar interpretação/extração do orçamento: filtros combinados, faixas, bônus, vigências, linguagem ambígua e números por extenso. Também cobre preservação de edição manual na reinterpretação.",
+      "item": [
+        {
+          "name": "Interpretar — taxa simples",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v2/interpretar",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"Aplicar comissão de 5% para todas as vendas da loja 75 a partir de janeiro de 2027\",\n  \"competencia\": \"2027-01\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Interpretar — número por extenso (taxa)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v2/interpretar",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"Comissão de dez por cento para a loja 75, a partir de janeiro de 2027\",\n  \"competencia\": \"2027-01\"\n}"
+            }
+          },
+          "description": "Valida a conversão determinística em app/core/normalizers/extenso.py: 'dez por cento' deve virar taxa 0.1000, sem inventar valor."
+        },
+        {
+          "name": "Interpretar — valor monetário por extenso (bônus)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v2/interpretar",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"Bônus fixo de dois mil reais por venda para o cargo 100, a partir de janeiro de 2027\",\n  \"competencia\": \"2027-01\"\n}"
+            }
+          },
+          "description": "Valida app/core/normalizers/faixas.py normalizar_valor_monetario com extenso: 'dois mil reais' -> 2000.00."
+        },
+        {
+          "name": "Interpretar — filtros combinados + faixa de valor",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v2/interpretar",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"Para a marca 10, cargo 100 e loja 75, pague 8% nas vendas entre 1000 e 5000 reais, de janeiro a março de 2027\",\n  \"competencia\": \"2027-01\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Interpretar — linguagem ambígua (deve gerar pendência, não inventar)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v2/interpretar",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"Aumenta um pouco a comissão do pessoal de vendas da loja 75\",\n  \"competencia\": \"2027-01\"\n}"
+            }
+          },
+          "description": "Espera status PROPOSTA_COM_PENDENCIAS ou SEM_PROPOSTA com Pendencia explicando a ambiguidade (ex.: AMBIGUIDADE_CARGO/TRECHO_INCOMPLETO) — nunca um valor numérico inventado."
+        },
+        {
+          "name": "Reinterpretar — preserva edição manual",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v2/reinterpretar",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idLocal\": \"p1\",\n  \"textoAlterado\": \"Aplicar 6% para a loja 75, a partir de janeiro de 2027\",\n  \"blocoAtual\": {\n    \"idLocal\": \"p1\",\n    \"condicoes\": { \"codLoja\": 75 },\n    \"operacao\": { \"tipo\": \"TAXA_ABSOLUTA\", \"valor\": 0.0450 },\n    \"taxa\": 0.0450,\n    \"dataInicio\": \"2027-01-01\"\n  },\n  \"demaisBlocos\": []\n}"
+            }
+          },
+          "description": "camposAlterados deve listar só o que de fato mudou (ex.: taxa/operacao), sem tocar campos não citados no texto alterado."
+        }
+      ]
+    },
+    {
+      "name": "IA-2 — BUG-115: gerar programa completo antes da revisão técnica",
+      "description": "/gerar-programa roda a geração + sondagem ANTES de ter vendas reais, devolvendo assinatura (sha256). /simular com codigoAprovado+assinaturaPrograma executa esse código sem regerá-lo.",
+      "item": [
+        {
+          "name": "1) Gerar programa — sem cálculo adicional (TEMPLATE)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v2/gerar-programa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"propostas\": [\n    {\n      \"idLocal\": \"p1\",\n      \"condicoes\": { \"codLoja\": 75 },\n      \"taxa\": 0.05,\n      \"dataInicio\": \"2026-12-01\",\n      \"dataFim\": \"2026-12-31\"\n    }\n  ]\n}"
+            }
+          },
+          "description": "origem deve vir TEMPLATE, codigo=null, assinatura = sha256 do TEMPLATE_CODIGO. Guarde a 'assinatura' da resposta para reusar no /simular (ela deve bater com o template de qualquer execução)."
+        },
+        {
+          "name": "2) Gerar programa — com cálculo adicional (CODIGO_LIVRE)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v2/gerar-programa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"propostas\": [\n    {\n      \"idLocal\": \"p1\",\n      \"condicoes\": { \"codLoja\": 75 },\n      \"taxa\": 0.05,\n      \"dataInicio\": \"2026-12-01\",\n      \"dataFim\": \"2026-12-31\"\n    }\n  ],\n  \"pedido\": \"faça um ranking de comissão por matrícula, do maior para o menor\"\n}"
+            }
+          },
+          "description": "origem deve vir CODIGO_LIVRE, codigo preenchido, assinatura = sha256(codigo). Copie 'codigo' e 'assinatura' da resposta nas variáveis codigoAprovado/assinaturaPrograma da coleção (ou cole direto no corpo do request 3) para testar o /simular sem regerar."
+        },
+        {
+          "name": "3) Buscar programa por assinatura — revisão posterior",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v2/programa/{{assinaturaPrograma}}"
+          },
+          "description": "Preencha {{assinaturaPrograma}} com a 'assinatura' devolvida pelo request 2 (funciona tanto pro TEMPLATE quanto pro CODIGO_LIVRE). Devolve {assinatura, codigo, premissas}. Assinatura inexistente -> 404."
+        },
+        {
+          "name": "4) Simular — com codigoAprovado + assinaturaPrograma (não deve chamar o LLM de novo)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v2/simular",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"propostas\": [\n    {\n      \"idLocal\": \"p1\",\n      \"condicoes\": { \"codLoja\": 75 },\n      \"taxa\": 0.05,\n      \"dataInicio\": \"2026-12-01\",\n      \"dataFim\": \"2026-12-31\"\n    }\n  ],\n  \"competencia\": \"{{competencia}}\",\n  \"vendas\": [\n    { \"id\": \"v1\", \"matricula\": \"M1\", \"codLoja\": 75, \"valorVenda\": \"1000.00\", \"dataVenda\": \"2026-12-10\" },\n    { \"id\": \"v2\", \"matricula\": \"M2\", \"codLoja\": 75, \"valorVenda\": \"500.00\", \"dataVenda\": \"2026-12-11\" }\n  ],\n  \"codigoAprovado\": \"{{codigoAprovado}}\",\n  \"assinaturaPrograma\": \"{{assinaturaPrograma}}\"\n}"
+            }
+          },
+          "description": "Preencha {{codigoAprovado}} e {{assinaturaPrograma}} com o que veio do request 2 antes de rodar este. Espera observacoes citando 'não foi reinterpretado' e assinaturaPrograma igual à enviada."
+        },
+        {
+          "name": "5) Simular — assinatura divergente (deve bloquear, 0 resultados)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v2/simular",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"propostas\": [\n    {\n      \"idLocal\": \"p1\",\n      \"condicoes\": { \"codLoja\": 75 },\n      \"taxa\": 0.05,\n      \"dataInicio\": \"2026-12-01\",\n      \"dataFim\": \"2026-12-31\"\n    }\n  ],\n  \"competencia\": \"{{competencia}}\",\n  \"vendas\": [\n    { \"id\": \"v1\", \"matricula\": \"M1\", \"codLoja\": 75, \"valorVenda\": \"1000.00\", \"dataVenda\": \"2026-12-10\" }\n  ],\n  \"codigoAprovado\": \"{{codigoAprovado}}\",\n  \"assinaturaPrograma\": \"assinatura-propositalmente-errada\"\n}"
+            }
+          },
+          "description": "Prova de que /simular não confia cegamente no codigoAprovado: resultados=[] e pendência citando divergência de assinatura."
+        }
+      ]
+    },
+    {
+      "name": "IA-3 — BUG-116: execução isolada sobre o recorte do backend",
+      "description": "Vendas vêm no corpo (contrato assumido com BACK-10, ainda não implementado no backend) como fonte ÚNICA — sem consulta silenciosa a outra base.",
+      "item": [
+        {
+          "name": "Simular — com recorte de vendas (sem pedido, usa TEMPLATE)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v2/simular",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"propostas\": [\n    {\n      \"idLocal\": \"p1\",\n      \"condicoes\": { \"codLoja\": 75 },\n      \"taxa\": 0.02,\n      \"dataInicio\": \"2026-12-01\",\n      \"dataFim\": \"2026-12-31\"\n    }\n  ],\n  \"competencia\": \"{{competencia}}\",\n  \"vendas\": [\n    { \"id\": \"v1\", \"matricula\": \"M1\", \"codLoja\": 75, \"codMarca\": 10, \"codCargo\": 100, \"valorVenda\": \"1000.00\", \"dataVenda\": \"2026-12-10\" },\n    { \"id\": \"v2\", \"matricula\": \"M2\", \"codLoja\": 75, \"codMarca\": 10, \"codCargo\": 100, \"valorVenda\": \"500.00\", \"dataVenda\": \"2026-12-11\" }\n  ]\n}"
+            }
+          },
+          "description": "versaoFontes.origemDados deve ser RECORTE_BACKEND e qtdVendas=2. totalVendas do cenário padrão deve bater com a soma do recorte (1500.00), nunca com dados de outra origem."
+        },
+        {
+          "name": "Simular — recorte vazio (deve falhar explicitamente, não cair pra consulta interna)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v2/simular",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"propostas\": [\n    {\n      \"idLocal\": \"p1\",\n      \"condicoes\": { \"codLoja\": 75 },\n      \"taxa\": 0.02,\n      \"dataInicio\": \"2026-12-01\",\n      \"dataFim\": \"2026-12-31\"\n    }\n  ],\n  \"competencia\": \"{{competencia}}\",\n  \"vendas\": []\n}"
+            }
+          },
+          "description": "Espera resultados=[] e pendência citando que o recorte está vazio — não deve consultar nenhuma outra base de dados."
+        },
+        {
+          "name": "Simular — sem 'vendas' (fallback: consulta interna, modo antigo)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v2/simular",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"propostas\": [\n    {\n      \"idLocal\": \"p1\",\n      \"condicoes\": { \"codLoja\": 75 },\n      \"taxa\": 0.02,\n      \"dataInicio\": \"2026-12-01\",\n      \"dataFim\": \"2026-12-31\"\n    }\n  ],\n  \"competencia\": \"{{competencia}}\"\n}"
+            }
+          },
+          "description": "Sem 'vendas' no corpo, versaoFontes.origemDados deve vir CONSULTA_AGENTE (comportamento anterior preservado para quem ainda não manda o recorte)."
+        }
+      ]
+    }
+  ]
+}

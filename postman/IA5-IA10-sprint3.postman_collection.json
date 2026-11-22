@@ -1,0 +1,399 @@
+{
+  "info": {
+    "name": "ComissionAI-ai — IA-5 a IA-10 (Sprint 3)",
+    "description": "Contratos da Sprint 3 (docs/CONTRATO-SPRINT3.md). Defina `apiKey` igual a AI_SERVICE_API_KEY do serviço (vazia em desenvolvimento). Base de números: p1 = 5% para vendas ≥ 1000 na loja 75; v2 fica no fallback contratual de 2,5%; v3 está fora do público; campanha de 15 dias (fator 0,5).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "apiKey",
+      "value": ""
+    },
+    {
+      "key": "authHeader",
+      "value": "X-Internal-Api-Key"
+    },
+    {
+      "key": "competencia",
+      "value": "2025-11"
+    },
+    {
+      "key": "campanhaId",
+      "value": "42"
+    },
+    {
+      "key": "execucaoId",
+      "value": "exec-demo-1"
+    },
+    {
+      "key": "usuarioId",
+      "value": "user-demo"
+    }
+  ],
+  "item": [
+    {
+      "name": "IA-5 — BUG-118: quatro cenários e orçamento",
+      "item": [
+        {
+          "name": "Simular — 4 cenários com orçamento (cabe no 100%)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "{{authHeader}}",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v2/simular",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contexto\": {\n    \"campanhaId\": \"{{campanhaId}}\",\n    \"execucaoId\": \"{{execucaoId}}\",\n    \"usuarioSolicitanteId\": \"{{usuarioId}}\"\n  },\n  \"competencia\": \"{{competencia}}\",\n  \"propostas\": [\n    {\n      \"idLocal\": \"p1\",\n      \"condicoes\": {\n        \"codLoja\": 75,\n        \"faixaValor\": {\n          \"min\": 1000,\n          \"minInclusivo\": true\n        }\n      },\n      \"taxa\": 0.05\n    }\n  ],\n  \"vendas\": [\n    {\n      \"id\": \"v1\",\n      \"matricula\": \"M1\",\n      \"codLoja\": 75,\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 1000.0,\n      \"dataVenda\": \"2025-11-24\"\n    },\n    {\n      \"id\": \"v2\",\n      \"matricula\": \"M2\",\n      \"codLoja\": 75,\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 500.0,\n      \"dataVenda\": \"2025-11-25\"\n    },\n    {\n      \"id\": \"v3\",\n      \"matricula\": \"M3\",\n      \"codLoja\": 99,\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 800.0,\n      \"dataVenda\": \"2025-11-26\"\n    }\n  ],\n  \"taxasContratuais\": [\n    {\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"taxa\": 0.025\n    }\n  ],\n  \"periodoCampanha\": {\n    \"dataInicio\": \"2026-12-01\",\n    \"dataFim\": \"2026-12-15\"\n  },\n  \"orcamento\": 35\n}"
+            }
+          },
+          "description": "Custo projetado 15,00 / 31,25 / 37,50 / 46,88. orcamento.statusCenario100 = ENQUADRADO, valorEncaminhamento = 31.25; 120% e 150% ACIMA_DO_TETO. exclusoes[] traz v3 (FORA_DO_PUBLICO)."
+        },
+        {
+          "name": "Simular — sem orçamento",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "{{authHeader}}",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v2/simular",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contexto\": {\n    \"campanhaId\": \"{{campanhaId}}\",\n    \"execucaoId\": \"{{execucaoId}}\",\n    \"usuarioSolicitanteId\": \"{{usuarioId}}\"\n  },\n  \"competencia\": \"{{competencia}}\",\n  \"propostas\": [\n    {\n      \"idLocal\": \"p1\",\n      \"condicoes\": {\n        \"codLoja\": 75,\n        \"faixaValor\": {\n          \"min\": 1000,\n          \"minInclusivo\": true\n        }\n      },\n      \"taxa\": 0.05\n    }\n  ],\n  \"vendas\": [\n    {\n      \"id\": \"v1\",\n      \"matricula\": \"M1\",\n      \"codLoja\": 75,\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 1000.0,\n      \"dataVenda\": \"2025-11-24\"\n    },\n    {\n      \"id\": \"v2\",\n      \"matricula\": \"M2\",\n      \"codLoja\": 75,\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 500.0,\n      \"dataVenda\": \"2025-11-25\"\n    },\n    {\n      \"id\": \"v3\",\n      \"matricula\": \"M3\",\n      \"codLoja\": 99,\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 800.0,\n      \"dataVenda\": \"2025-11-26\"\n    }\n  ],\n  \"taxasContratuais\": [\n    {\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"taxa\": 0.025\n    }\n  ],\n  \"periodoCampanha\": {\n    \"dataInicio\": \"2026-12-01\",\n    \"dataFim\": \"2026-12-15\"\n  }\n}"
+            }
+          },
+          "description": "statusEnquadramento = NAO_APLICAVEL; aptoEncaminhamentoGerente = false."
+        }
+      ]
+    },
+    {
+      "name": "IA-6/IA-7 — BUG-119/120: calibração e explicações",
+      "item": [
+        {
+          "name": "Simular — cenários excedidos com sugestão",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "{{authHeader}}",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v2/simular",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contexto\": {\n    \"campanhaId\": \"{{campanhaId}}\",\n    \"execucaoId\": \"{{execucaoId}}\",\n    \"usuarioSolicitanteId\": \"{{usuarioId}}\"\n  },\n  \"competencia\": \"{{competencia}}\",\n  \"propostas\": [\n    {\n      \"idLocal\": \"p1\",\n      \"condicoes\": {\n        \"codLoja\": 75,\n        \"faixaValor\": {\n          \"min\": 1000,\n          \"minInclusivo\": true\n        }\n      },\n      \"taxa\": 0.05\n    }\n  ],\n  \"vendas\": [\n    {\n      \"id\": \"v1\",\n      \"matricula\": \"M1\",\n      \"codLoja\": 75,\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 1000.0,\n      \"dataVenda\": \"2025-11-24\"\n    },\n    {\n      \"id\": \"v2\",\n      \"matricula\": \"M2\",\n      \"codLoja\": 75,\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 500.0,\n      \"dataVenda\": \"2025-11-25\"\n    },\n    {\n      \"id\": \"v3\",\n      \"matricula\": \"M3\",\n      \"codLoja\": 99,\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 800.0,\n      \"dataVenda\": \"2025-11-26\"\n    }\n  ],\n  \"taxasContratuais\": [\n    {\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"taxa\": 0.025\n    }\n  ],\n  \"periodoCampanha\": {\n    \"dataInicio\": \"2026-12-01\",\n    \"dataFim\": \"2026-12-15\"\n  },\n  \"orcamento\": 35,\n  \"calibrar\": true\n}"
+            }
+          },
+          "description": "calibracoes[2..3].status = ENQUADRADA com alteracoes (taxa p1 de 0.05 para ~0.0458 em 120%). explicacoes[].tipo = SUGESTAO_VALIDADA; todo número do texto está em numeros{}."
+        },
+        {
+          "name": "Simular — sem sugestão viável",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "{{authHeader}}",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v2/simular",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contexto\": {\n    \"campanhaId\": \"{{campanhaId}}\",\n    \"execucaoId\": \"{{execucaoId}}\",\n    \"usuarioSolicitanteId\": \"{{usuarioId}}\"\n  },\n  \"competencia\": \"{{competencia}}\",\n  \"propostas\": [\n    {\n      \"idLocal\": \"p1\",\n      \"condicoes\": {\n        \"codLoja\": 75,\n        \"faixaValor\": {\n          \"min\": 1000,\n          \"minInclusivo\": true\n        }\n      },\n      \"taxa\": 0.05\n    }\n  ],\n  \"vendas\": [\n    {\n      \"id\": \"v1\",\n      \"matricula\": \"M1\",\n      \"codLoja\": 75,\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 1000.0,\n      \"dataVenda\": \"2025-11-24\"\n    },\n    {\n      \"id\": \"v2\",\n      \"matricula\": \"M2\",\n      \"codLoja\": 75,\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 500.0,\n      \"dataVenda\": \"2025-11-25\"\n    },\n    {\n      \"id\": \"v3\",\n      \"matricula\": \"M3\",\n      \"codLoja\": 99,\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 800.0,\n      \"dataVenda\": \"2025-11-26\"\n    }\n  ],\n  \"taxasContratuais\": [\n    {\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"taxa\": 0.025\n    }\n  ],\n  \"periodoCampanha\": {\n    \"dataInicio\": \"2026-12-01\",\n    \"dataFim\": \"2026-12-15\"\n  },\n  \"orcamento\": 5,\n  \"calibrar\": true\n}"
+            }
+          },
+          "description": "calibracoes[].status = SEM_SOLUCAO_VIAVEL (custo mínimo 6,30 no 100%: parcela contratual). explicacoes[].tipo = SEM_SOLUCAO_VIAVEL; nenhuma alteração sugerida."
+        },
+        {
+          "name": "Simular — calibrar sem orçamento",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "{{authHeader}}",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v2/simular",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contexto\": {\n    \"campanhaId\": \"{{campanhaId}}\",\n    \"execucaoId\": \"{{execucaoId}}\",\n    \"usuarioSolicitanteId\": \"{{usuarioId}}\"\n  },\n  \"competencia\": \"{{competencia}}\",\n  \"propostas\": [\n    {\n      \"idLocal\": \"p1\",\n      \"condicoes\": {\n        \"codLoja\": 75,\n        \"faixaValor\": {\n          \"min\": 1000,\n          \"minInclusivo\": true\n        }\n      },\n      \"taxa\": 0.05\n    }\n  ],\n  \"vendas\": [\n    {\n      \"id\": \"v1\",\n      \"matricula\": \"M1\",\n      \"codLoja\": 75,\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 1000.0,\n      \"dataVenda\": \"2025-11-24\"\n    },\n    {\n      \"id\": \"v2\",\n      \"matricula\": \"M2\",\n      \"codLoja\": 75,\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 500.0,\n      \"dataVenda\": \"2025-11-25\"\n    },\n    {\n      \"id\": \"v3\",\n      \"matricula\": \"M3\",\n      \"codLoja\": 99,\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 800.0,\n      \"dataVenda\": \"2025-11-26\"\n    }\n  ],\n  \"taxasContratuais\": [\n    {\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"taxa\": 0.025\n    }\n  ],\n  \"periodoCampanha\": {\n    \"dataInicio\": \"2026-12-01\",\n    \"dataFim\": \"2026-12-15\"\n  },\n  \"calibrar\": true\n}"
+            }
+          },
+          "description": "statusSugestoes = FALHA e pendência no campo orcamento; os números da simulação continuam válidos."
+        }
+      ]
+    },
+    {
+      "name": "IA-8 — BUG-121: anomalias diárias",
+      "item": [
+        {
+          "name": "Anomalias — alerta e erro de carga",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "{{authHeader}}",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v2/anomalias/analisar",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contexto\": {\n    \"campanhaId\": \"{{campanhaId}}\",\n    \"execucaoId\": \"{{execucaoId}}\",\n    \"usuarioSolicitanteId\": \"{{usuarioId}}\"\n  },\n  \"competencia\": \"{{competencia}}\",\n  \"vendas\": [\n    {\n      \"id\": \"a0\",\n      \"matricula\": \"M0\",\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 1000,\n      \"dataVenda\": \"2025-11-24\"\n    },\n    {\n      \"id\": \"a1\",\n      \"matricula\": \"M1\",\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 1050,\n      \"dataVenda\": \"2025-11-24\"\n    },\n    {\n      \"id\": \"a2\",\n      \"matricula\": \"M2\",\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 1100,\n      \"dataVenda\": \"2025-11-24\"\n    },\n    {\n      \"id\": \"a3\",\n      \"matricula\": \"M3\",\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 1150,\n      \"dataVenda\": \"2025-11-24\"\n    },\n    {\n      \"id\": \"a4\",\n      \"matricula\": \"M4\",\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 1200,\n      \"dataVenda\": \"2025-11-24\"\n    },\n    {\n      \"id\": \"a5\",\n      \"matricula\": \"M5\",\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 1250,\n      \"dataVenda\": \"2025-11-24\"\n    },\n    {\n      \"id\": \"a6\",\n      \"matricula\": \"M6\",\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 1300,\n      \"dataVenda\": \"2025-11-24\"\n    },\n    {\n      \"id\": \"a7\",\n      \"matricula\": \"M7\",\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 1350,\n      \"dataVenda\": \"2025-11-24\"\n    },\n    {\n      \"id\": \"a8\",\n      \"matricula\": \"M8\",\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 1400,\n      \"dataVenda\": \"2025-11-24\"\n    },\n    {\n      \"id\": \"a9\",\n      \"matricula\": \"M9\",\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 1450,\n      \"dataVenda\": \"2025-11-24\"\n    },\n    {\n      \"id\": \"ax\",\n      \"matricula\": \"MX\",\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 9000,\n      \"dataVenda\": \"2025-11-24\"\n    },\n    {\n      \"id\": \"sem-rh\",\n      \"matricula\": \"FANTASMA\",\n      \"codMarca\": 10,\n      \"valorVenda\": 50000,\n      \"dataVenda\": \"2025-11-24\"\n    }\n  ]\n}"
+            }
+          },
+          "description": "MX (9.000,00) vira ACIMA_DA_FAIXA no grupo marca 10 / VENDEDOR LOJA (11 observações). A venda sem cargo vira errosCarga VENDA_SEM_RH. tipo = INDICIO_PARA_CONFERENCIA."
+        },
+        {
+          "name": "Anomalias — amostra insuficiente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "{{authHeader}}",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v2/anomalias/analisar",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"competencia\": \"{{competencia}}\",\n  \"vendas\": [\n    {\n      \"id\": \"a0\",\n      \"matricula\": \"M0\",\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 1000,\n      \"dataVenda\": \"2025-11-24\"\n    },\n    {\n      \"id\": \"a1\",\n      \"matricula\": \"M1\",\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 1050,\n      \"dataVenda\": \"2025-11-24\"\n    },\n    {\n      \"id\": \"a2\",\n      \"matricula\": \"M2\",\n      \"codMarca\": 10,\n      \"codCargo\": 100,\n      \"descriCargo\": \"VENDEDOR LOJA\",\n      \"valorVenda\": 1100,\n      \"dataVenda\": \"2025-11-24\"\n    }\n  ]\n}"
+            }
+          },
+          "description": "Grupo com 3 observações: AMOSTRA_INSUFICIENTE, nenhum alerta."
+        }
+      ]
+    },
+    {
+      "name": "IA-10 — BUG-123: segurança, rastreabilidade e erros",
+      "item": [
+        {
+          "name": "Chave inválida → 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "{{authHeader}}",
+                "value": "chave-errada"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v2/anomalias/analisar",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"competencia\": \"{{competencia}}\",\n  \"vendas\": []\n}"
+            }
+          },
+          "description": "Com AI_SERVICE_API_KEY configurada no serviço: 401, error_code CHAVE_INTERNA_INVALIDA."
+        },
+        {
+          "name": "Health (livre)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          },
+          "description": "Sempre 200, sem chave."
+        },
+        {
+          "name": "Validação → 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "{{authHeader}}",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v2/anomalias/analisar",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"competencia\": \"11/2025\",\n  \"vendas\": []\n}"
+            }
+          },
+          "description": "error_code VALIDACAO_ENTRADA com erros[].loc = [body, competencia]."
+        },
+        {
+          "name": "Programa inexistente → 404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "{{authHeader}}",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v2/programa/0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "description": "error_code NAO_ENCONTRADO."
+        }
+      ]
+    },
+    {
+      "name": "IA-10 — BUG-123: executar-programa (contrato do BACK-9/BACK-11)",
+      "item": [
+        {
+          "name": "Executar programa aprovado — simulação",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "{{authHeader}}",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v2/executar-programa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigoFonte\": \"# ===================================================================\\n# Programa Executável da Campanha: Natal\\n# Período de Vigência: 2025-11-01 até 2025-11-30\\n# Versão da Campanha: 3\\n# ===================================================================\\nfrom decimal import Decimal, ROUND_HALF_UP\\n\\ndef calcular_comissao(venda: dict) -> float | None:\\n    \\\"\\\"\\\"Calcula a comissão para um registro de venda segundo as regras da campanha.\\\"\\\"\\\"\\n    data_raw = venda.get('data_venda') if venda.get('data_venda') is not None else venda.get('dataVenda', '')\\n    data_venda = str(data_raw)[:10]\\n    if not venda.get('ignorar_vigencia') and not ('2025-11-01' <= data_venda <= '2025-11-30'):\\n        return None\\n\\n    valor_raw = venda.get('valor_venda')\\n    if valor_raw is None:\\n        valor_raw = venda.get('valor')\\n    if valor_raw is None:\\n        return None\\n    valor = Decimal(str(valor_raw))\\n    if valor <= 0:\\n        return None\\n\\n    centavo = Decimal('0.01')\\n    taxa_base_raw = venda.get('taxa_base')\\n    taxa_base_venda = Decimal(str(taxa_base_raw)) if taxa_base_raw is not None else None\\n\\n    # Regra 1: b1 - Loja 75 acima de mil\\n    if venda.get('cod_loja') == 75 and valor >= Decimal('1000'):\\n        # Operação: ACRESCIMO_PONTOS\\n        ajuste = Decimal('0.01')\\n        taxa = (taxa_base_venda + ajuste) if taxa_base_venda is not None else Decimal('0.035')\\n        comissao = (valor * taxa).quantize(centavo, rounding=ROUND_HALF_UP)\\n        return float(comissao)\\n\\n    # Regra 2: b2 - Marca 10\\n    if venda.get('cod_marca') == 10:\\n        # Operação: DEFINIR_TAXA\\n        taxa = Decimal('0.03')\\n        comissao = (valor * taxa).quantize(centavo, rounding=ROUND_HALF_UP)\\n        bonus_fixo = Decimal('5')\\n        comissao += bonus_fixo.quantize(centavo, rounding=ROUND_HALF_UP)\\n        return float(comissao)\\n\\n    return None\\n\",\n  \"contexto\": {\n    \"modo\": \"SIMULACAO\",\n    \"campanhaId\": 42,\n    \"versaoCampanha\": 3,\n    \"versaoProgramaPython\": 2,\n    \"competencia\": \"{{competencia}}\"\n  },\n  \"itens\": [\n    {\n      \"id\": \"v1#100\",\n      \"venda\": {\n        \"id_venda\": \"00000000-0000-0000-0000-000000000001\",\n        \"data_venda\": \"2025-11-01\",\n        \"dataVenda\": \"2025-11-01\",\n        \"valor_venda\": 1200.0,\n        \"valor\": 1200.0,\n        \"canal\": \"PADRAO\",\n        \"cod_marca\": 10,\n        \"cod_loja\": 75,\n        \"cod_cargo\": 100,\n        \"matricula\": \"MATRIC-1\",\n        \"taxa_base\": 0.025,\n        \"ignorar_vigencia\": true\n      },\n      \"contexto\": {\n        \"cenario\": \"100%\",\n        \"fator\": 1.0\n      }\n    },\n    {\n      \"id\": \"v1#80\",\n      \"venda\": {\n        \"id_venda\": \"00000000-0000-0000-0000-000000000001\",\n        \"data_venda\": \"2025-11-01\",\n        \"dataVenda\": \"2025-11-01\",\n        \"valor_venda\": 960.0,\n        \"valor\": 960.0,\n        \"canal\": \"PADRAO\",\n        \"cod_marca\": 10,\n        \"cod_loja\": 75,\n        \"cod_cargo\": 100,\n        \"matricula\": \"MATRIC-1\",\n        \"taxa_base\": 0.025,\n        \"ignorar_vigencia\": true\n      },\n      \"contexto\": {\n        \"cenario\": \"80%\",\n        \"fator\": 0.8\n      }\n    },\n    {\n      \"id\": \"v2#100\",\n      \"venda\": {\n        \"id_venda\": \"00000000-0000-0000-0000-000000000002\",\n        \"data_venda\": \"2025-11-01\",\n        \"dataVenda\": \"2025-11-01\",\n        \"valor_venda\": 500.0,\n        \"valor\": 500.0,\n        \"canal\": \"PADRAO\",\n        \"cod_marca\": 10,\n        \"cod_loja\": 75,\n        \"cod_cargo\": 100,\n        \"matricula\": \"MATRIC-2\",\n        \"taxa_base\": 0.025,\n        \"ignorar_vigencia\": true\n      },\n      \"contexto\": {\n        \"cenario\": \"100%\",\n        \"fator\": 1.0\n      }\n    },\n    {\n      \"id\": \"v2#80\",\n      \"venda\": {\n        \"id_venda\": \"00000000-0000-0000-0000-000000000002\",\n        \"data_venda\": \"2025-11-01\",\n        \"dataVenda\": \"2025-11-01\",\n        \"valor_venda\": 400.0,\n        \"valor\": 400.0,\n        \"canal\": \"PADRAO\",\n        \"cod_marca\": 10,\n        \"cod_loja\": 75,\n        \"cod_cargo\": 100,\n        \"matricula\": \"MATRIC-2\",\n        \"taxa_base\": 0.025,\n        \"ignorar_vigencia\": true\n      },\n      \"contexto\": {\n        \"cenario\": \"80%\",\n        \"fator\": 0.8\n      }\n    },\n    {\n      \"id\": \"v3#100\",\n      \"venda\": {\n        \"id_venda\": \"00000000-0000-0000-0000-000000000003\",\n        \"data_venda\": \"2025-11-01\",\n        \"dataVenda\": \"2025-11-01\",\n        \"valor_venda\": 900.0,\n        \"valor\": 900.0,\n        \"canal\": \"PADRAO\",\n        \"cod_marca\": 20,\n        \"cod_loja\": 12,\n        \"cod_cargo\": 100,\n        \"matricula\": \"MATRIC-3\",\n        \"taxa_base\": 0.025,\n        \"ignorar_vigencia\": true\n      },\n      \"contexto\": {\n        \"cenario\": \"100%\",\n        \"fator\": 1.0\n      }\n    }\n  ]\n}"
+            }
+          },
+          "description": "Formato exato do SimulacaoPythonOrquestradorService. Esperado 200, sucesso=true, motor PYTHON_SANDBOX: v1#100 = 42.00 (regra 1, taxa_base + 1 p.p.), v1#80 = 33.80 (regra 2), v3#100 aplicada=false (backend usa a taxa contratual). assinaturaPrograma = sha256 do código (igual ao checksum do BACK-9)."
+        },
+        {
+          "name": "Executar programa — erro em um item → 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "{{authHeader}}",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v2/executar-programa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigoFonte\": \"def calcular_comissao(venda):\\n    return 10 / venda['divisor']\\n\",\n  \"contexto\": {\n    \"modo\": \"APURACAO\",\n    \"campanhaId\": 42\n  },\n  \"itens\": [\n    {\n      \"id\": \"ok\",\n      \"venda\": {\n        \"divisor\": 2\n      }\n    },\n    {\n      \"id\": \"quebra\",\n      \"venda\": {\n        \"divisor\": 0\n      }\n    }\n  ]\n}"
+            }
+          },
+          "description": "Fail-closed: 422, sucesso=false, error_code PROGRAMA_FALHOU, erro ERRO_CODIGO, detalhe cita o item 'quebra' e ZeroDivisionError; resultados=null (sem parcial)."
+        },
+        {
+          "name": "Executar programa — código proibido → 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "{{authHeader}}",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v2/executar-programa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigoFonte\": \"import os\\n\\ndef calcular_comissao(venda):\\n    return os.getpid()\\n\",\n  \"itens\": [\n    {\n      \"id\": \"a\",\n      \"venda\": {}\n    }\n  ]\n}"
+            }
+          },
+          "description": "422, error_code PROGRAMA_REJEITADO, erro VALIDACAO, violacoes[] com o import proibido. Nada é executado."
+        }
+      ]
+    }
+  ]
+}

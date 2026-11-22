@@ -56,6 +56,8 @@ CONTRATO (inegociável):
 - Dinheiro em Decimal com quantize(Decimal("0.01"), rounding=ROUND_HALF_UP).
 - Regra de comissão: uma única regra por venda, a de maior especificidade
   (matrícula 16, loja 8, cargo 4, canal 2, marca 1); comissão = valor×taxa (+ bônus percentual + bônus fixo).
+- Venda sem regra aplicável: comissão = valor×`taxaContratual`, somada em porBloco["BASE_CONTRATUAL"];
+  se `taxaContratual` for null, a venda não recebe comissão (não invente taxa).
 
 PERMITIDO SOMENTE:
 - Imports: {imports}.

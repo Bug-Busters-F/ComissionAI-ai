@@ -51,20 +51,42 @@ class Sandbox:
         if len(vendas) > settings.sim_max_registros:
             return ResultadoSandbox(False, erro="VALIDACAO", detalhe="Registros acima do limite da simulação.")
 
-        carga = json.dumps(
-            {
-                "codigo": codigo,
-                "vendas": vendas,
-                "regras": regras,
-                "cenarios": cenarios,
-                "limites": {
-                    "memoria_mb": settings.sim_max_memory_mb,
-                    "cpu_s": int(settings.sim_max_seconds) + 1,
-                    "saida_max_bytes": settings.sim_max_output_kb * 1024,
-                },
+        carga = {
+            "codigo": codigo,
+            "vendas": vendas,
+            "regras": regras,
+            "cenarios": cenarios,
+            "limites": {
+                "memoria_mb": settings.sim_max_memory_mb,
+                "cpu_s": int(settings.sim_max_seconds) + 1,
+                "saida_max_bytes": settings.sim_max_output_kb * 1024,
             },
-            default=str,
-        )
+        }
+        return self._rodar(carga, settings.sim_max_seconds)
+
+    def executar_programa(self, codigo: str, aridade: int, itens: list[dict[str, Any]]) -> ResultadoSandbox:
+        """
+        Programa aprovado no backend (IA-10 / contrato do BACK-9): `calcular_comissao` por item.
+        O código já passou por `validar_programa`; `resultados` = comissão (texto) ou None por item, na ordem.
+        """
+        carga = {
+            "modo": "programa",
+            "codigo": codigo,
+            "aridade": aridade,
+            "itens": itens,
+            "limites": {
+                "memoria_mb": settings.sim_max_memory_mb,
+                "cpu_s": int(settings.exec_max_seconds) + 1,
+                "saida_max_bytes": settings.exec_max_output_kb * 1024,
+            },
+        }
+        res = self._rodar(carga, settings.exec_max_seconds)
+        if res.ok and len(res.resultados) != len(itens):
+            return ResultadoSandbox(False, erro="SAIDA_INVALIDA", detalhe="quantidade de resultados diferente da de itens.")
+        return res
+
+    def _rodar(self, carga_obj: dict[str, Any], timeout: float) -> ResultadoSandbox:
+        carga = json.dumps(carga_obj, default=str)
         env: dict[str, str] = {}
         if sys.platform == "win32" and "SYSTEMROOT" in os.environ:
             # Windows (só desenvolvimento): o interpretador não inicia sem SYSTEMROOT; nada mais é herdado
@@ -75,13 +97,13 @@ class Sandbox:
                     [sys.executable, "-I", str(_RUNNER)],
                     input=carga.encode("utf-8"),
                     capture_output=True,
-                    timeout=settings.sim_max_seconds,
+                    timeout=timeout,
                     cwd=tmp,
                     env=env,
                     close_fds=True,
                 )
             except subprocess.TimeoutExpired:
-                return ResultadoSandbox(False, erro="TIMEOUT", detalhe=f"Excedeu {settings.sim_max_seconds:g}s.")
+                return ResultadoSandbox(False, erro="TIMEOUT", detalhe=f"Excedeu {timeout:g}s.")
         saida = proc.stdout
         if proc.returncode == 97:
             return ResultadoSandbox(False, erro="VIOLACAO", detalhe="Operação proibida bloqueada pelo sandbox.")

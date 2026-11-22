@@ -55,6 +55,19 @@ class TestNormalizadorOperacao(unittest.TestCase):
         self.assertEqual(delta, Decimal("0.0100"))
         self.assertEqual(p, [])
 
+    def test_numero_por_extenso_na_operacao(self):
+        """Bug achado em review: por extenso funcionava em normalizar_taxa mas não aqui, porque a
+        detecção de dígito rodava antes de qualquer tentativa de extenso."""
+        tipo, delta, p = normalizar_operacao("mais dez pontos percentuais")
+        self.assertEqual(tipo, "ADICIONAR_PP")
+        self.assertEqual(delta, Decimal("0.1000"))
+        self.assertEqual(p, [])
+
+        tipo, delta, p = normalizar_operacao("reduzir cinco por cento sobre a base")
+        self.assertEqual(tipo, "REDUZIR_PERCENTUAL")
+        self.assertEqual(delta, Decimal("0.0500"))
+        self.assertEqual(p, [])
+
     def test_taxa_absoluta(self):
         tipo, val, p = normalizar_operacao("3%")
         self.assertEqual(tipo, "TAXA_ABSOLUTA")

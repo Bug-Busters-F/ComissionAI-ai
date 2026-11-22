@@ -1,0 +1,710 @@
+{
+  "$defs": {
+    "BlocoProposta": {
+      "properties": {
+        "bonus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Bonus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "codigoPython": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Codigopython"
+        },
+        "condicoes": {
+          "$ref": "#/$defs/Condicoes"
+        },
+        "confianca": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confianca"
+        },
+        "dataFim": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Datafim"
+        },
+        "dataInicio": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Datainicio"
+        },
+        "evidencias": {
+          "items": {
+            "$ref": "#/$defs/EvidenciaTool"
+          },
+          "title": "Evidencias",
+          "type": "array"
+        },
+        "explicacao": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Explicacao"
+        },
+        "idLocal": {
+          "title": "Idlocal",
+          "type": "string"
+        },
+        "operacao": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Operacao"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "origem": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Origem"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "pendencias": {
+          "items": {
+            "$ref": "#/$defs/Pendencia"
+          },
+          "title": "Pendencias",
+          "type": "array"
+        },
+        "referencias": {
+          "items": {
+            "$ref": "#/$defs/ReferenciaBase"
+          },
+          "title": "Referencias",
+          "type": "array"
+        },
+        "taxa": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Taxa"
+        }
+      },
+      "required": [
+        "idLocal"
+      ],
+      "title": "BlocoProposta",
+      "type": "object"
+    },
+    "Bonus": {
+      "description": "Adicional sobre a venda, em percentual e/ou valor fixo por venda.",
+      "properties": {
+        "percentual": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Percentual"
+        },
+        "valorFixo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Valorfixo"
+        }
+      },
+      "title": "Bonus",
+      "type": "object"
+    },
+    "CodigoPendencia": {
+      "description": "Catálogo fechado de pendências.",
+      "enum": [
+        "CAMPO_AUSENTE",
+        "AMBIGUIDADE_CARGO",
+        "AMBIGUIDADE_PUBLICO",
+        "CADASTRO_INEXISTENTE",
+        "MATRICULA_INVALIDA",
+        "CRITERIO_NAO_SUPORTADO",
+        "TRECHO_INCOMPLETO",
+        "VIGENCIA_INCOMPATIVEL",
+        "BASE_AUSENTE",
+        "CONFLITO_REGRA",
+        "TOOL_FALHA",
+        "LIMITE_AGENTE_ATINGIDO",
+        "TAXA_INVALIDA",
+        "SIMULACAO_NAO_VALIDADA",
+        "NAO_SUPORTADO_NA_APURACAO"
+      ],
+      "title": "CodigoPendencia",
+      "type": "string"
+    },
+    "Condicoes": {
+      "properties": {
+        "canal": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Canal"
+        },
+        "codCargo": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Codcargo"
+        },
+        "codLoja": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Codloja"
+        },
+        "codMarca": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Codmarca"
+        },
+        "descrMarca": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Descrmarca"
+        },
+        "descriCargo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Descricargo"
+        },
+        "faixaValor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FaixaValor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "matricula": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Matricula"
+        }
+      },
+      "title": "Condicoes",
+      "type": "object"
+    },
+    "ContextoProposta": {
+      "description": "Identifica de onde vem o pedido. Todos os ids são opacos para a IA.",
+      "properties": {
+        "campanhaId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Campanhaid"
+        },
+        "execucaoId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Id da execução no backend; devolvido em cada explicação (IA-7).",
+          "title": "Execucaoid"
+        },
+        "origem": {
+          "default": "NOVA",
+          "enum": [
+            "NOVA",
+            "VERSAO_EXISTENTE"
+          ],
+          "title": "Origem",
+          "type": "string"
+        },
+        "revisao": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revisao"
+        },
+        "substituiVersao": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Substituiversao"
+        },
+        "usuarioSolicitanteId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usuariosolicitanteid"
+        },
+        "versaoPrograma": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Versão do programa aprovada no backend (BACK-9); a IA devolve também a assinatura.",
+          "title": "Versaoprograma"
+        }
+      },
+      "title": "ContextoProposta",
+      "type": "object"
+    },
+    "EvidenciaTool": {
+      "description": "Registro rastreável de uma consulta/execução do agente.",
+      "properties": {
+        "argumentos": {
+          "additionalProperties": true,
+          "title": "Argumentos",
+          "type": "object"
+        },
+        "blocosAfetados": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Blocosafetados",
+          "type": "array"
+        },
+        "duracaoMs": {
+          "default": 0,
+          "title": "Duracaoms",
+          "type": "integer"
+        },
+        "ferramenta": {
+          "title": "Ferramenta",
+          "type": "string"
+        },
+        "passo": {
+          "default": 0,
+          "title": "Passo",
+          "type": "integer"
+        },
+        "resumo": {
+          "default": "",
+          "title": "Resumo",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "OK",
+            "SEM_DADOS",
+            "AMBIGUO",
+            "FALHA"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ferramenta",
+        "status"
+      ],
+      "title": "EvidenciaTool",
+      "type": "object"
+    },
+    "FaixaValor": {
+      "properties": {
+        "campo": {
+          "const": "VENDA",
+          "default": "VENDA",
+          "title": "Campo",
+          "type": "string"
+        },
+        "max": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max"
+        },
+        "maxInclusivo": {
+          "default": false,
+          "title": "Maxinclusivo",
+          "type": "boolean"
+        },
+        "min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min"
+        },
+        "minInclusivo": {
+          "default": true,
+          "title": "Mininclusivo",
+          "type": "boolean"
+        }
+      },
+      "title": "FaixaValor",
+      "type": "object"
+    },
+    "Operacao": {
+      "description": "O que fazer com a taxa. IA-2 só preenche TAXA_ABSOLUTA; os demais são do IA-5.",
+      "properties": {
+        "tipo": {
+          "enum": [
+            "TAXA_ABSOLUTA",
+            "ADICIONAR_PP",
+            "REDUZIR_PP",
+            "AUMENTAR_PERCENTUAL",
+            "REDUZIR_PERCENTUAL"
+          ],
+          "title": "Tipo",
+          "type": "string"
+        },
+        "valor": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Valor"
+        }
+      },
+      "required": [
+        "tipo",
+        "valor"
+      ],
+      "title": "Operacao",
+      "type": "object"
+    },
+    "Origem": {
+      "description": "Trecho literal do pedido que originou um bloco.",
+      "properties": {
+        "fim": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fim"
+        },
+        "inicio": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inicio"
+        },
+        "trecho": {
+          "title": "Trecho",
+          "type": "string"
+        }
+      },
+      "required": [
+        "trecho"
+      ],
+      "title": "Origem",
+      "type": "object"
+    },
+    "Pendencia": {
+      "properties": {
+        "campo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Campo"
+        },
+        "codigo": {
+          "$ref": "#/$defs/CodigoPendencia"
+        },
+        "mensagem": {
+          "title": "Mensagem",
+          "type": "string"
+        },
+        "pergunta": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pergunta"
+        }
+      },
+      "required": [
+        "codigo",
+        "mensagem"
+      ],
+      "title": "Pendencia",
+      "type": "object"
+    },
+    "ReferenciaBase": {
+      "properties": {
+        "chave": {
+          "additionalProperties": true,
+          "title": "Chave",
+          "type": "object"
+        },
+        "consultadaEm": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Consultadaem"
+        },
+        "fonte": {
+          "enum": [
+            "BASE_COMISS",
+            "TB_REGRA",
+            "CADASTRO"
+          ],
+          "title": "Fonte",
+          "type": "string"
+        },
+        "taxaBase": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Taxabase"
+        }
+      },
+      "required": [
+        "fonte"
+      ],
+      "title": "ReferenciaBase",
+      "type": "object"
+    }
+  },
+  "description": "Gera e valida o programa da simulação ANTES da revisão técnica (IA-2), sem rodar sobre vendas reais.",
+  "properties": {
+    "contexto": {
+      "$ref": "#/$defs/ContextoProposta"
+    },
+    "pedido": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Mesmo campo de SimularRequest.pedido: indica se há cálculo adicional (ex.: ajuste sobre a base) que exige código livre em vez do template fixo.",
+      "title": "Pedido"
+    },
+    "propostas": {
+      "items": {
+        "$ref": "#/$defs/BlocoProposta"
+      },
+      "title": "Propostas",
+      "type": "array"
+    }
+  },
+  "required": [
+    "propostas"
+  ],
+  "title": "GerarProgramaRequest",
+  "type": "object"
+}
